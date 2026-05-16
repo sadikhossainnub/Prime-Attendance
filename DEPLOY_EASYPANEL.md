@@ -116,7 +116,7 @@ curl -H "X-API-Key: YOUR_API_KEY" \
 | 502 Bad Gateway | Container port `7788` মিলিয়েছে কিনা |
 | ডিভাইস কানেক্ট হয় না | LAN নয় — পাবলিক IP + port 7788 খোলা; Cloud Server ON |
 | UI 401 | Settings-এ `API_KEY` মিলিয়েছে কিনা |
-| PathError: Missing parameter name | src/ এ app.get('*' খুঁজে app.use( বা regex দিয়ে replace করো |
+| UI 401 | Settings-এ `API_KEY` মিলিয়েছেন কিনা |
 
 ---
 
