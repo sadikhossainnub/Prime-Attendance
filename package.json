@@ -1,0 +1,12 @@
+{
+  "name": "prime-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "docker:up": "docker compose up -d postgres",
+    "docker:all": "docker compose up -d --build"
+  }
+}

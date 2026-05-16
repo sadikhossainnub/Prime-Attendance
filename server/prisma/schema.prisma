@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id           String   @id @default(cuid())
+  serialNumber String   @unique @map("serial_number")
+  name         String?
+  lastSeenAt   DateTime? @map("last_seen_at")
+  lastIp       String?  @map("last_ip")
+  firmware     String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("devices")
+}
+
+model AttendanceLog {
+  id                String    @id @default(cuid())
+  deviceSn          String    @map("device_sn")
+  userPin           String    @map("user_pin")
+  punchedAt         DateTime  @map("punched_at")
+  status            Int?
+  verifyType        Int?      @map("verify_type")
+  inOutMode         Int?      @map("in_out_mode")
+  workCode          Int?      @map("work_code")
+  rawLine           String?   @map("raw_line")
+  syncStatus        SyncStatus @default(PENDING) @map("sync_status")
+  erpnextCheckinId  String?   @map("erpnext_checkin_id")
+  syncedAt          DateTime? @map("synced_at")
+  syncError         String?   @map("sync_error")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@unique([deviceSn, userPin, punchedAt])
+  @@index([punchedAt])
+  @@index([deviceSn])
+  @@index([userPin])
+  @@index([syncStatus])
+  @@map("attendance_logs")
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+  SKIPPED
+}
+
+model EmployeeMapping {
+  id                 String   @id @default(cuid())
+  userPin            String   @unique @map("user_pin")
+  employeeName       String   @map("employee_name")
+  erpnextEmployeeId  String?  @map("erpnext_employee_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("employee_mappings")
+}
+
+model DeviceRawEvent {
+  id          String   @id @default(cuid())
+  deviceSn    String?  @map("device_sn")
+  method      String
+  path        String
+  query       String?
+  bodyPreview String?  @map("body_preview")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([deviceSn])
+  @@index([createdAt])
+  @@map("device_raw_events")
+}

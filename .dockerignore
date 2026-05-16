@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+**/dist
+.env
+**/.env
+*.log
+.git
+.cursor
+client/node_modules
+server/node_modules
+server/dist
+client/dist
+README.md
+scripts
