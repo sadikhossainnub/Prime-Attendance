@@ -59,7 +59,7 @@ const clientDist =
   process.env.CLIENT_DIST_PATH ??
   path.join(__dirname, "../../client/dist");
 app.use(express.static(clientDist));
-app.get("/{*splat}", (req, res, next) => {
+app.get(/(.*)/, (req, res, next) => {
   if (
     req.path.startsWith("/iclock") ||
     req.path.startsWith("/api") ||
