@@ -49,7 +49,20 @@ export default function Attendance() {
           <h2 className="text-2xl font-bold text-white">Attendance</h2>
           <p className="text-slate-400 text-sm">মোট {total}</p>
         </div>
-        <button type="button" onClick={exportCsv} disabled={!items.length} className="px-4 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-40">CSV</button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm("Sync retry শুরু করবেন?")) {
+                portalApi.syncRetry().then((r) => alert(r.message));
+              }
+            }}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-sm"
+          >
+            Sync ERPNext
+          </button>
+          <button type="button" onClick={exportCsv} disabled={!items.length} className="px-4 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-40">CSV</button>
+        </div>
       </div>
       <div className="flex flex-wrap gap-3 items-end">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />

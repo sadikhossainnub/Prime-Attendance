@@ -81,6 +81,8 @@ export const portalApi = {
     }),
   attendance: (params: URLSearchParams) =>
     apiFetch<AttendanceResponse>(`/api/portal/attendance?${params}`),
+  syncRetry: () => apiFetch<{ message: string; count: number }>("/api/portal/sync-retry", { method: "POST" }),
+  rawEvents: (limit?: number) => apiFetch<unknown[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
   mappings: () => apiFetch<EmployeeMapping[]>("/api/portal/employees/mapping"),
   saveMapping: (data: {
     userPin: string;

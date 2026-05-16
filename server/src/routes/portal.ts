@@ -5,7 +5,7 @@ import {
   requireTenantUser,
   type AuthRequest,
 } from "../middleware/auth.js";
-import { isErpnextEnabled } from "../services/erpnext.js";
+import { isErpnextEnabled, queueAttendanceSync } from "../services/erpnext.js";
 
 export const portalRouter = Router();
 portalRouter.use(requireAuth, requireTenantUser);
@@ -229,4 +229,32 @@ portalRouter.get("/raw-events", async (req: AuthRequest, res: Response) => {
     take: limit,
   });
   res.json(events);
+});
+
+portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
+  const tid = tenantId(req);
+  if (!isErpnextEnabled()) {
+    res.status(400).json({ error: "ERPNext sync is not enabled" });
+    return;
+  }
+
+  // Find failed or skipped logs for this tenant
+  const logs = await prisma.attendanceLog.findMany({
+    where: {
+      tenantId: tid,
+      syncStatus: { in: ["FAILED", "SKIPPED", "PENDING"] },
+    },
+    select: { id: true },
+    take: 100, // Limit to 100 at a time
+  });
+
+  // Trigger sync in background
+  for (const log of logs) {
+    void queueAttendanceSync(log.id);
+  }
+
+  res.json({
+    message: `Triggered sync retry for ${logs.length} logs`,
+    count: logs.length,
+  });
 });
