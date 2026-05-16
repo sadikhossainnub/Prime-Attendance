@@ -1,17 +1,28 @@
 # Prime Attendance
 
-ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স ডিভাইস থেকে **সরাসরি** পাঞ্চ ডেটা গ্রহণের সার্ভার। কোনো ZKTeco PC সফটওয়্যার বা ম্যানুয়াল এক্সপোর্ট লাগে না — ডিভাইস **ADMS / Cloud Server (push)** মোডে এই সার্ভারকে পোল করে `ATTLOG` পাঠায়।
+ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স ডিভাইস থেকে **সরাসরি** পাঞ্চ ডেটা গ্রহণের **SaaS প্ল্যাটফর্ম**। প্রতিটি ক্লায়েন্টের আলাদা portal, ডেটা আলাদা (multi-tenant), আপনি super admin হিসেবে সব ক্লায়েন্ট ম্যানেজ করেন।
+
+## SaaS পোর্টাল
+
+| পোর্টাল | URL | কে ব্যবহার করে |
+|---------|-----|----------------|
+| **Super Admin** | `/admin` | আপনি — ক্লায়েন্ট তৈরি, suspend, stats |
+| **Client Portal** | `/portal` | আপনার ক্লায়েন্ট — attendance, devices, employees |
+
+**ডিফল্ট Super Admin (প্রথম চালুতে অটো তৈরি):**
+
+- Email: `admin@primetechbd.xyz` (`.env` দিয়ে পরিবর্তন)
+- Password: `Admin@12345` — **প্রডাকশনে অবশ্যই বদলান**
 
 ## বৈশিষ্ট্য
 
-- ZKTeco ADMS push প্রোটোকল (`/iclock/*`)
-- অটো ডিভাইস রেজিস্ট্রেশন (Serial Number অনুযায়ী)
-- অ্যাটেনডেন্স লগ সংরক্ষণ + ডুপ্লিকেট বাদ
-- React অ্যাডমিন UI (Dashboard, Attendance, Devices, Employee Mapping)
-- REST API (`X-API-Key` অথেন্টিকেশন)
-- Raw event লগ (ডিবাগ ও নতুন ফার্মওয়্যার মিলানোর জন্য)
-- ERPNext সিঙ্কের হুক (ঐচ্ছিক, ডিফল্ট বন্ধ)
-- Docker ও EasyPanel-এ deploy-ready
+- **Multi-tenant SaaS** — প্রতি ক্লায়েন্ট আলাদা ডেটা
+- ZKTeco ADMS push (`/iclock/*`) + provision key
+- **Super Admin:** ক্লায়েন্ট CRUD, suspend, global dashboard
+- **Client Portal:** dashboard, attendance, devices, PIN mapping
+- JWT লগইন (Super Admin / Tenant Admin / Tenant User)
+- ERPNext সিঙ্ক হুক (ঐচ্ছিক)
+- Docker ও EasyPanel-ready
 
 ## টেক স্ট্যাক
 
@@ -77,7 +88,7 @@ npm run dev
 
 UI: `http://localhost:5173`
 
-**Settings** পেজে API Key দিন — ডিফল্ট: `change-me` (`server/.env` এর `API_KEY` এর সাথে মিলতে হবে)
+লগইন: `http://localhost:5173/login` → Super Admin credentials (উপরে)
 
 ---
 
@@ -89,7 +100,9 @@ UI: `http://localhost:5173`
 |----------|-------------|--------|
 | `DATABASE_URL` | হ্যাঁ | PostgreSQL connection string |
 | `PORT` | না | ডিফল্ট `7788` |
-| `API_KEY` | হ্যাঁ | Admin API ও UI অথেন্টিকেশন |
+| `JWT_SECRET` | হ্যাঁ | JWT সাইনিং (৩২+ অক্ষর) |
+| `SUPER_ADMIN_EMAIL` | না | প্রথম super admin |
+| `SUPER_ADMIN_PASSWORD` | না | প্রথম super admin পাসওয়ার্ড |
 | `TZ` | না | ডিফল্ট `Asia/Dhaka` |
 | `CLIENT_DIST_PATH` | না | Production UI path (`/app/client-dist`) |
 | `ERPNEXT_ENABLED` | না | `true` / `false` (ডিফল্ট `false`) |
@@ -98,6 +111,16 @@ UI: `http://localhost:5173`
 | `ERPNEXT_API_SECRET` | না | ERPNext API secret |
 
 উদাহরণ: [.env.example](./.env.example)
+
+---
+
+## ক্লায়েন্ট ওয়ার্কফ্লো (SaaS)
+
+1. **Super Admin** (`/admin`) → **Clients** → **New client** (কোম্পানি + admin user)
+2. ক্লায়েন্ট লগইন (`/portal`) → **Devices** → Serial Number যোগ করুন
+3. **Settings** → Provision Key দেখুন
+4. ZKTeco ডিভাইসে IP + port `7788` সেট করুন
+5. প্রথম কানেকশন: ডিভাইস SN portal-এ আগে থেকে থাকলে অটো; নতুন ডিভাইসে URL-এ `?tenant=SLUG&key=PROVISION_KEY`
 
 ---
 
@@ -311,18 +334,30 @@ PIN    DateTime              Status  Verify  InOutMode  WorkCode
 101    2026-05-16 09:00:00   0       1       0          0
 ```
 
-### Admin API (হেডার: `X-API-Key: your-key`)
+### Auth API
 
 | Method | Path | বিবরণ |
 |--------|------|--------|
-| GET | `/health` | সার্ভার + DB স্ট্যাটাস (পাবলিক) |
-| GET | `/api/health` | বিস্তারিত health |
-| GET | `/api/devices` | রেজিস্টার্ড ডিভাইস |
-| GET | `/api/attendance` | লগ (`?from=&to=&pin=&deviceSn=&page=&limit=`) |
-| GET | `/api/attendance/stats/today` | আজকের পাঞ্চ সংখ্যা |
-| GET/POST | `/api/employees/mapping` | PIN ↔ কর্মচারী ম্যাপিং |
-| DELETE | `/api/employees/mapping/:userPin` | ম্যাপিং মুছুন |
-| GET | `/api/raw-events` | ডিবাগ raw লগ |
+| POST | `/api/auth/login` | `{ email, password }` → JWT |
+| GET | `/api/auth/me` | Bearer token |
+
+### Super Admin API (`Authorization: Bearer <token>`)
+
+| Method | Path | বিবরণ |
+|--------|------|--------|
+| GET | `/api/admin/stats` | Global dashboard |
+| GET/POST | `/api/admin/tenants` | ক্লায়েন্ট তালিকা / তৈরি |
+| GET/PATCH | `/api/admin/tenants/:id` | বিস্তারিত / আপডেট |
+
+### Client Portal API (Bearer token, tenant-scoped)
+
+| Method | Path | বিবরণ |
+|--------|------|--------|
+| GET | `/api/portal/dashboard` | ক্লায়েন্ট dashboard |
+| GET/POST | `/api/portal/devices` | ডিভাইস |
+| GET | `/api/portal/attendance` | অ্যাটেনডেন্স লগ |
+| GET/POST | `/api/portal/employees/mapping` | PIN ম্যাপিং |
+| GET | `/api/portal/settings` | Provision key, slug |
 
 ---
 
@@ -344,7 +379,8 @@ curl -X POST "http://localhost:7788/iclock/cdata?SN=TEST001&table=ATTLOG" \
   -d $'101\t2026-05-16 09:00:00\t0\t1\t0\t0'
 
 # API দিয়ে দেখা
-curl -H "X-API-Key: change-me" "http://localhost:7788/api/attendance?limit=10"
+# Login first, then use token:
+# curl -H "Authorization: Bearer TOKEN" "http://localhost:7788/api/portal/attendance?limit=10"
 ```
 
 ---
@@ -357,7 +393,7 @@ curl -H "X-API-Key: change-me" "http://localhost:7788/api/attendance?limit=10"
 docker build -t prime-attendance .
 docker run -p 7788:7788 \
   -e DATABASE_URL="postgresql://user:pass@host:5432/db" \
-  -e API_KEY="your-secure-key" \
+  -e JWT_SECRET="your-jwt-secret" \
   prime-attendance
 ```
 
@@ -379,7 +415,7 @@ docker compose up -d --build
 
 1. EasyPanel-এ **PostgreSQL** সার্ভিস তৈরি করুন
 2. **App** সার্ভিস → GitHub repo → Dockerfile path: `Dockerfile` → Port: `7788`
-3. Env: `DATABASE_URL`, `API_KEY`, `TZ`, `CLIENT_DIST_PATH=/app/client-dist`
+3. Env: `DATABASE_URL`, `JWT_SECRET`, `SUPER_ADMIN_*`, `CLIENT_DIST_PATH=/app/client-dist`
 4. Domain + SSL যোগ করুন
 5. ZKTeco-তে VPS IP + port `7788` সেট করুন
 
@@ -400,15 +436,11 @@ UI-তে **Employees** পেজে প্রতিটি PIN-এর জন্�
 
 ---
 
-## Admin UI পেজ
+## UI পেজ
 
-| পেজ | কাজ |
-|-----|-----|
-| **Dashboard** | আজকের পাঞ্চ, অনলাইন ডিভাইস |
-| **Attendance** | ফিল্টার, CSV export |
-| **Devices** | সিরিয়াল, IP, last seen |
-| **Employees** | PIN ↔ নাম / ERPNext ID |
-| **Settings** | API Key সেট ও টেস্ট |
+**Super Admin (`/admin`):** Dashboard, Clients (create/suspend), Client detail
+
+**Client Portal (`/portal`):** Dashboard, Attendance, Devices, Employees, Settings (provision key)
 
 ---
 
@@ -418,7 +450,7 @@ UI-তে **Employees** পেজে প্রতিটি PIN-এর জন্�
 |--------|---------------|--------|
 | ডিভাইস কানেক্ট হয় না | ভুল IP/পোর্ট, ফায়ারওয়াল | LAN/VPS IP, port 7788, `ufw` চেক |
 | ডিভাইস আসে, ATTLOG নেই | ফার্মওয়্যার ফরম্যাট | `/api/raw-events` দেখুন |
-| UI তে 401 | API key মিলছে না | Settings = server `API_KEY` |
+| UI তে 401 | Token expired | আবার `/login` করুন |
 | Build fail (EasyPanel) | Dockerfile path | root `Dockerfile` সিলেক্ট করুন |
 | DB error | `DATABASE_URL` ভুল | Internal URL (EasyPanel DB) |
 | সময় ভুল | টাইমজোন | `TZ=Asia/Dhaka`, ডিভাইস ঘড়ি মিলান |

@@ -1,13 +1,17 @@
 import { prisma } from "../lib/prisma.js";
 
 export async function upsertDevice(
+  tenantId: string,
   serialNumber: string,
   ip: string | undefined,
   firmware?: string
 ) {
   return prisma.device.upsert({
-    where: { serialNumber },
+    where: {
+      tenantId_serialNumber: { tenantId, serialNumber },
+    },
     create: {
+      tenantId,
       serialNumber,
       lastSeenAt: new Date(),
       lastIp: ip,
@@ -22,6 +26,7 @@ export async function upsertDevice(
 }
 
 export async function logRawEvent(params: {
+  tenantId?: string;
   deviceSn?: string;
   method: string;
   path: string;
@@ -31,6 +36,7 @@ export async function logRawEvent(params: {
   const preview = params.bodyPreview?.slice(0, 4000) ?? null;
   return prisma.deviceRawEvent.create({
     data: {
+      tenantId: params.tenantId,
       deviceSn: params.deviceSn,
       method: params.method,
       path: params.path,

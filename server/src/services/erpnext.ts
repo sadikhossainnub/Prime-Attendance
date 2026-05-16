@@ -47,7 +47,9 @@ async function syncAttendanceToErpnext(log: AttendanceLog): Promise<void> {
   }
 
   const mapping = await prisma.employeeMapping.findUnique({
-    where: { userPin: log.userPin },
+    where: {
+      tenantId_userPin: { tenantId: log.tenantId, userPin: log.userPin },
+    },
   });
 
   if (!mapping?.erpnextEmployeeId) {

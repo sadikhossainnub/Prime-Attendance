@@ -1,6 +1,10 @@
 import { Router, type Request, type Response } from "express";
-import { upsertDevice, logRawEvent } from "../services/deviceService.js";
+import { logRawEvent } from "../services/deviceService.js";
 import { ingestAttlog } from "../services/attendanceIngest.js";
+import {
+  resolveTenantForDevice,
+  registerDeviceToTenant,
+} from "../services/tenantResolver.js";
 
 export const iclockRouter = Router();
 
@@ -14,13 +18,35 @@ function getTable(req: Request): string | undefined {
   return typeof table === "string" ? table : undefined;
 }
 
+function getTenantSlug(req: Request): string | undefined {
+  const t = req.query.tenant ?? req.query.Tenant;
+  return typeof t === "string" ? t : undefined;
+}
+
+function getProvisionKey(req: Request): string | undefined {
+  const k = req.query.key ?? req.query.provision_key;
+  return typeof k === "string" ? k : undefined;
+}
+
 function clientIp(req: Request): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string") return forwarded.split(",")[0]!.trim();
   return req.socket.remoteAddress ?? "";
 }
 
-async function recordRaw(req: Request, deviceSn?: string) {
+async function resolveTenant(req: Request, sn: string | undefined) {
+  if (!sn) return null;
+  return resolveTenantForDevice(sn, {
+    tenantSlug: getTenantSlug(req),
+    provisionKey: getProvisionKey(req),
+  });
+}
+
+async function recordRaw(
+  req: Request,
+  tenantId?: string,
+  deviceSn?: string
+) {
   const body =
     typeof req.body === "string"
       ? req.body
@@ -29,6 +55,7 @@ async function recordRaw(req: Request, deviceSn?: string) {
         : "";
 
   await logRawEvent({
+    tenantId,
     deviceSn,
     method: req.method,
     path: req.path,
@@ -53,22 +80,36 @@ function buildOptionsResponse(): string {
   ].join("\r\n");
 }
 
-/** GET /iclock/cdata — device handshake / options */
+async function handleDeviceConnection(req: Request, sn: string) {
+  const tenant = await resolveTenant(req, sn);
+  if (!tenant) {
+    console.warn(`[iclock] Unknown device SN=${sn} — register in portal or use ?tenant=slug&key=provision_key`);
+    return null;
+  }
+  await registerDeviceToTenant(tenant.id, sn, clientIp(req));
+  return tenant;
+}
+
 iclockRouter.get("/cdata", async (req: Request, res: Response) => {
   const sn = getSn(req);
   const table = getTable(req);
 
   try {
+    let tenantId: string | undefined;
     if (sn) {
-      await upsertDevice(sn, clientIp(req));
+      const tenant = await handleDeviceConnection(req, sn);
+      if (!tenant) {
+        res.type("text/plain").status(403).send("ERROR: Device not registered");
+        return;
+      }
+      tenantId = tenant.id;
     }
-    await recordRaw(req, sn);
+    await recordRaw(req, tenantId, sn);
 
     if (table === "options" || req.query.options === "all") {
       res.type("text/plain").send(buildOptionsResponse());
       return;
     }
-
     res.type("text/plain").send("OK");
   } catch (err) {
     console.error("[iclock] GET cdata error:", err);
@@ -76,11 +117,9 @@ iclockRouter.get("/cdata", async (req: Request, res: Response) => {
   }
 });
 
-/** POST /iclock/cdata — attendance and other table uploads */
 iclockRouter.post("/cdata", async (req: Request, res: Response) => {
   const sn = getSn(req);
   const table = getTable(req);
-
   const body =
     typeof req.body === "string"
       ? req.body
@@ -89,20 +128,25 @@ iclockRouter.post("/cdata", async (req: Request, res: Response) => {
         : "";
 
   try {
-    if (sn) {
-      await upsertDevice(sn, clientIp(req));
-    }
-    await recordRaw(req, sn);
-
     if (!sn) {
+      await recordRaw(req);
       res.type("text/plain").send("OK");
       return;
     }
 
+    const tenant = await handleDeviceConnection(req, sn);
+    if (!tenant) {
+      await recordRaw(req, undefined, sn);
+      res.type("text/plain").status(403).send("ERROR: Device not registered");
+      return;
+    }
+
+    await recordRaw(req, tenant.id, sn);
+
     if (table === "ATTLOG" || table === "attlog") {
-      const { inserted, duplicates } = await ingestAttlog(sn, body);
+      const { inserted, duplicates } = await ingestAttlog(tenant.id, sn, body);
       console.log(
-        `[iclock] ATTLOG from ${sn}: inserted=${inserted} duplicates=${duplicates}`
+        `[iclock] ATTLOG tenant=${tenant.slug} sn=${sn}: inserted=${inserted} dup=${duplicates}`
       );
     }
 
@@ -111,7 +155,6 @@ iclockRouter.post("/cdata", async (req: Request, res: Response) => {
       res.type("text/plain").send(`OK:${stamp}`);
       return;
     }
-
     res.type("text/plain").send("OK");
   } catch (err) {
     console.error("[iclock] POST cdata error:", err);
@@ -119,45 +162,34 @@ iclockRouter.post("/cdata", async (req: Request, res: Response) => {
   }
 });
 
-/** GET/POST /iclock/getrequest — device polls for commands */
 iclockRouter.all("/getrequest", async (req: Request, res: Response) => {
   const sn = getSn(req);
   try {
-    if (sn) {
-      await upsertDevice(sn, clientIp(req));
-    }
-    await recordRaw(req, sn);
+    if (sn) await handleDeviceConnection(req, sn);
+    await recordRaw(req, undefined, sn);
     res.type("text/plain").send("OK\n");
   } catch (err) {
-    console.error("[iclock] getrequest error:", err);
     res.type("text/plain").status(500).send("ERROR");
   }
 });
 
-/** GET/POST /iclock/devicecmd — command execution results */
 iclockRouter.all("/devicecmd", async (req: Request, res: Response) => {
   const sn = getSn(req);
   try {
-    if (sn) {
-      await upsertDevice(sn, clientIp(req));
-    }
-    await recordRaw(req, sn);
+    if (sn) await handleDeviceConnection(req, sn);
+    await recordRaw(req, undefined, sn);
     res.type("text/plain").send("OK");
   } catch (err) {
-    console.error("[iclock] devicecmd error:", err);
     res.type("text/plain").status(500).send("ERROR");
   }
 });
 
-/** Optional heartbeat */
 iclockRouter.all("/ping", async (req: Request, res: Response) => {
   const sn = getSn(req);
   try {
-    if (sn) {
-      await upsertDevice(sn, clientIp(req));
-    }
+    if (sn) await handleDeviceConnection(req, sn);
     res.type("text/plain").send("OK");
-  } catch (err) {
+  } catch {
     res.type("text/plain").status(500).send("ERROR");
   }
 });

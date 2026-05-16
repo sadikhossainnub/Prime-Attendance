@@ -6,7 +6,10 @@ import { fileURLToPath } from "url";
 import { config } from "./lib/config.js";
 import { prisma } from "./lib/prisma.js";
 import { iclockRouter } from "./routes/iclock.js";
-import { apiRouter } from "./routes/api.js";
+import { authRouter } from "./routes/auth.js";
+import { adminRouter } from "./routes/admin.js";
+import { portalRouter } from "./routes/portal.js";
+import { seedSuperAdmin } from "./services/seed.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -21,12 +24,7 @@ const iclockLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+app.use(cors({ origin: true, credentials: true }));
 
 app.use("/iclock", iclockLimiter);
 app.use(
@@ -47,28 +45,26 @@ app.use(express.json());
 app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok" });
+    res.json({ status: "ok", mode: "saas" });
   } catch {
     res.status(503).json({ status: "degraded" });
   }
 });
 
-app.use("/api", apiRouter);
-
-app.get("/api", (_req, res) => {
-  res.json({
-    name: "Prime Attendance",
-    iclock: "/iclock",
-    api: "/api",
-  });
-});
+app.use("/api/auth", authRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/portal", portalRouter);
 
 const clientDist =
   process.env.CLIENT_DIST_PATH ??
   path.join(__dirname, "../../client/dist");
 app.use(express.static(clientDist));
-app.get("*", (req, res, next) => {
-  if (req.path.startsWith("/iclock") || req.path.startsWith("/api")) {
+app.get("/{*splat}", (req, res, next) => {
+  if (
+    req.path.startsWith("/iclock") ||
+    req.path.startsWith("/api") ||
+    req.path === "/health"
+  ) {
     next();
     return;
   }
@@ -77,8 +73,15 @@ app.get("*", (req, res, next) => {
   });
 });
 
-app.listen(config.port, "0.0.0.0", () => {
-  console.log(`Prime Attendance server listening on port ${config.port}`);
-  console.log(`Timezone: ${config.timezone}`);
-  console.log(`ERPNext sync: ${config.erpnext.enabled ? "enabled" : "disabled"}`);
+async function start() {
+  await seedSuperAdmin();
+  app.listen(config.port, "0.0.0.0", () => {
+    console.log(`Prime Attendance SaaS on port ${config.port}`);
+    console.log(`Super admin: ${config.superAdmin.email}`);
+  });
+}
+
+start().catch((err) => {
+  console.error("Failed to start:", err);
+  process.exit(1);
 });

@@ -7,37 +7,101 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Device {
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  TENANT_USER
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum TenantPlan {
+  STARTER
+  BUSINESS
+  ENTERPRISE
+}
+
+model Tenant {
+  id                String       @id @default(cuid())
+  name              String
+  slug              String       @unique
+  status            TenantStatus @default(TRIAL)
+  plan              TenantPlan   @default(STARTER)
+  deviceProvisionKey String      @map("device_provision_key")
+  contactEmail      String?      @map("contact_email")
+  contactPhone      String?      @map("contact_phone")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  users            User[]
+  devices          Device[]
+  attendanceLogs   AttendanceLog[]
+  employeeMappings EmployeeMapping[]
+  rawEvents        DeviceRawEvent[]
+
+  @@map("tenants")
+}
+
+model User {
   id           String   @id @default(cuid())
-  serialNumber String   @unique @map("serial_number")
-  name         String?
-  lastSeenAt   DateTime? @map("last_seen_at")
-  lastIp       String?  @map("last_ip")
-  firmware     String?
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole
+  tenantId     String?  @map("tenant_id")
+  isActive     Boolean  @default(true) @map("is_active")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Device {
+  id           String    @id @default(cuid())
+  tenantId     String    @map("tenant_id")
+  serialNumber String    @map("serial_number")
+  name         String?
+  lastSeenAt   DateTime? @map("last_seen_at")
+  lastIp       String?   @map("last_ip")
+  firmware     String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, serialNumber])
+  @@index([tenantId])
   @@map("devices")
 }
 
 model AttendanceLog {
-  id                String    @id @default(cuid())
-  deviceSn          String    @map("device_sn")
-  userPin           String    @map("user_pin")
-  punchedAt         DateTime  @map("punched_at")
+  id                String     @id @default(cuid())
+  tenantId          String     @map("tenant_id")
+  deviceSn          String     @map("device_sn")
+  userPin           String     @map("user_pin")
+  punchedAt         DateTime   @map("punched_at")
   status            Int?
-  verifyType        Int?      @map("verify_type")
-  inOutMode         Int?      @map("in_out_mode")
-  workCode          Int?      @map("work_code")
-  rawLine           String?   @map("raw_line")
+  verifyType        Int?       @map("verify_type")
+  inOutMode         Int?       @map("in_out_mode")
+  workCode          Int?       @map("work_code")
+  rawLine           String?    @map("raw_line")
   syncStatus        SyncStatus @default(PENDING) @map("sync_status")
-  erpnextCheckinId  String?   @map("erpnext_checkin_id")
-  syncedAt          DateTime? @map("synced_at")
-  syncError         String?   @map("sync_error")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  erpnextCheckinId  String?    @map("erpnext_checkin_id")
+  syncedAt          DateTime?  @map("synced_at")
+  syncError         String?    @map("sync_error")
+  createdAt         DateTime   @default(now()) @map("created_at")
 
-  @@unique([deviceSn, userPin, punchedAt])
-  @@index([punchedAt])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, deviceSn, userPin, punchedAt])
+  @@index([tenantId, punchedAt])
   @@index([deviceSn])
   @@index([userPin])
   @@index([syncStatus])
@@ -52,18 +116,23 @@ enum SyncStatus {
 }
 
 model EmployeeMapping {
-  id                 String   @id @default(cuid())
-  userPin            String   @unique @map("user_pin")
-  employeeName       String   @map("employee_name")
-  erpnextEmployeeId  String?  @map("erpnext_employee_id")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  userPin           String   @map("user_pin")
+  employeeName      String   @map("employee_name")
+  erpnextEmployeeId String?  @map("erpnext_employee_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userPin])
   @@map("employee_mappings")
 }
 
 model DeviceRawEvent {
   id          String   @id @default(cuid())
+  tenantId    String?  @map("tenant_id")
   deviceSn    String?  @map("device_sn")
   method      String
   path        String
@@ -71,6 +140,9 @@ model DeviceRawEvent {
   bodyPreview String?  @map("body_preview")
   createdAt   DateTime @default(now()) @map("created_at")
 
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
   @@index([deviceSn])
   @@index([createdAt])
   @@map("device_raw_events")

@@ -3,6 +3,7 @@ import { parseAttlogBody } from "./attendanceParser.js";
 import { queueAttendanceSync } from "./erpnext.js";
 
 export async function ingestAttlog(
+  tenantId: string,
   deviceSn: string,
   body: string
 ): Promise<{ inserted: number; duplicates: number }> {
@@ -14,6 +15,7 @@ export async function ingestAttlog(
     try {
       const log = await prisma.attendanceLog.create({
         data: {
+          tenantId,
           deviceSn,
           userPin: row.userPin,
           punchedAt: row.punchedAt,

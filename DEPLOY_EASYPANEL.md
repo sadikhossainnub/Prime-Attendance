@@ -41,7 +41,9 @@
 |----------|--------|
 | `DATABASE_URL` | ধাপ ১-এর Internal URL |
 | `PORT` | `7788` |
-| `API_KEY` | শক্তিশালী র্যান্ডম কী (UI-এর জন্য) |
+| `JWT_SECRET` | শক্তিশালী র্যান্ডম স্ট্রিং (৩২+ অক্ষর) |
+| `SUPER_ADMIN_EMAIL` | আপনার admin email |
+| `SUPER_ADMIN_PASSWORD` | শক্তিশালী পাসওয়ার্ড |
 | `TZ` | `Asia/Dhaka` |
 | `ERPNEXT_ENABLED` | `false` |
 | `CLIENT_DIST_PATH` | `/app/client-dist` |
@@ -51,10 +53,11 @@
 
 ---
 
-## ধাপ ৩ — UI/API Key
+## ধাপ ৩ — লগইন
 
-1. ব্রাউজারে খুলুন: `https://attendance.primetechbd.xyz`
-2. **Settings** → `X-API-Key` = আপনার `API_KEY` (ধাপ ২)
+1. ব্রাউজারে: `https://attendance.primetechbd.xyz/login`
+2. Super Admin দিয়ে লগইন → `/admin` থেকে ক্লায়েন্ট তৈরি করুন
+3. ক্লায়েন্ট admin দিয়ে `/portal` লগইন
 
 ---
 
