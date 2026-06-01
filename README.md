@@ -478,3 +478,85 @@ cd server && npx prisma studio
 ## License
 
 Private / internal use — Prime Tech BD
+
+
+---
+
+## Device Offline কিন্তু ATTLOG আসছে? (Troubleshooting)
+
+এটি একটি সাধারণ সমস্যা যখন device সার্ভারে connect করছে কিন্তু **online status** update হচ্ছে না।
+
+### ডিবাগিং ধাপ:
+
+#### ১. সার্ভার লগ চেক করুন
+
+```bash
+npm run dev
+# Output-এ এই লাইন আসা উচিত:
+# [iclock] Device connected: SN=XXXXX, IP=185.250.37.21, tenant=your-tenant, lastSeen=2026-06-01T...
+```
+
+যদি এই লাইন না আসে, device সার্ভারে connect হচ্ছে না।
+
+#### ২. Raw Events দেখুন
+
+- UI → **Raw Events** → Device requests দেখা যাবে
+- যদি requests আসছে, device সার্ভারে connect করছে
+
+#### ३. Database সরাসরি চেক করুন
+
+```bash
+cd server
+npx prisma studio
+# Device table খুলুন → lastSeenAt timestamp দেখুন
+# যদি পুরনো থাকে, device connect হচ্ছে না
+```
+
+#### ४. Device IP ঠিক আছে কিনা
+
+```bash
+# সার্ভার থেকে device ping করুন
+ping 185.250.37.21
+
+# Device থেকে সার্ভার test করুন:
+curl -X GET "http://185.250.37.21:7788/iclock/ping?SN=YOUR_DEVICE_SN"
+```
+
+#### ५. Provision Key দিয়ে নতুন device register করুন
+
+**Option A: Portal-এ device add করুন**
+1. UI → **Devices** → **Add device**
+2. Serial Number দিন
+3. **Settings** → Provision Key কপি করুন
+
+**Option B: Device-এ URL-এ provision key যোগ করুন**
+
+Device menu-তে Cloud Server setting-এ:
+```
+Server Address: http://185.250.37.21:7788/iclock/cdata?tenant=YOUR_TENANT_SLUG&key=YOUR_PROVISION_KEY
+```
+
+#### ६. সার্ভার রিস্টার্ট করুন
+
+```bash
+npm run dev
+# বা EasyPanel-এ app restart করুন
+```
+
+#### ७. Online Status Threshold
+
+Device **10 মিনিটের মধ্যে** কোনো request না পাঠালে offline দেখাবে। এটি ঠিক আছে কারণ:
+- Device প্রতি ১-২ মিনিটে heartbeat পাঠায়
+- যদি ১০ মিনিট কোনো request না আসে, device সত্যিই offline
+
+### সাধারণ কারণ:
+
+| কারণ | সমাধান |
+|------|--------|
+| Device IP ভুল | Device menu-তে IP ঠিক করুন |
+| Port 7788 বন্ধ | VPS-এ `sudo ufw allow 7788/tcp` |
+| Device ঘড়ি ভুল | Device Date/Time সেট করুন |
+| Provision Key ভুল | Settings-এ সঠিক key দিন |
+| Device offline হয়েছে | Device restart করুন |
+| Network issue | Device ও সার্ভার একই network-এ আছে কিনা চেক করুন |
+

@@ -86,7 +86,13 @@ async function handleDeviceConnection(req: Request, sn: string) {
     console.warn(`[iclock] Unknown device SN=${sn} — register in portal or use ?tenant=slug&key=provision_key`);
     return null;
   }
-  await registerDeviceToTenant(tenant.id, sn, clientIp(req));
+  
+  const ip = clientIp(req);
+  const device = await registerDeviceToTenant(tenant.id, sn, ip);
+  
+  // Log successful connection
+  console.log(`[iclock] Device connected: SN=${sn}, IP=${ip}, tenant=${tenant.slug}, lastSeen=${device.lastSeenAt}`);
+  
   return tenant;
 }
 

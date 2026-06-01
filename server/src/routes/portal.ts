@@ -88,11 +88,15 @@ portalRouter.get("/devices", async (req: AuthRequest, res: Response) => {
     });
     const now = Date.now();
     res.json(
-      devices.map((d) => ({
-        ...d,
-        online:
-          d.lastSeenAt !== null && now - d.lastSeenAt.getTime() < 5 * 60 * 1000,
-      }))
+      devices.map((d) => {
+        // Device online if seen within last 10 minutes (increased from 5)
+        const isOnline = d.lastSeenAt !== null && now - d.lastSeenAt.getTime() < 10 * 60 * 1000;
+        return {
+          ...d,
+          online: isOnline,
+          lastSeenAtFormatted: d.lastSeenAt ? new Date(d.lastSeenAt).toISOString() : null,
+        };
+      })
     );
   } catch (err) {
     console.error("Devices error:", err);

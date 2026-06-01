@@ -1,5 +1,9 @@
 import { prisma } from "../lib/prisma.js";
 
+/**
+ * Upsert device with updated lastSeenAt timestamp
+ * Called every time device connects
+ */
 export async function upsertDevice(
   tenantId: string,
   serialNumber: string,
@@ -18,7 +22,7 @@ export async function upsertDevice(
       firmware,
     },
     update: {
-      lastSeenAt: new Date(),
+      lastSeenAt: new Date(), // Always update on connection
       lastIp: ip,
       ...(firmware ? { firmware } : {}),
     },
