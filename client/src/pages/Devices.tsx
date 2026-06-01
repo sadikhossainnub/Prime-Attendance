@@ -12,7 +12,7 @@ export default function Devices() {
     try {
       setError(null);
       const result = await portalApi.devices();
-      setDevices(result);
+      setDevices(Array.isArray(result) ? result : []);
     } catch (err) {
       console.error("Failed to load devices:", err);
       setError(err instanceof Error ? err.message : "Failed to load devices");

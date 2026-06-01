@@ -15,7 +15,7 @@ export default function Tenants() {
   });
   const [error, setError] = useState<string | null>(null);
 
-  const load = () => adminApi.tenants().then(setTenants);
+  const load = () => adminApi.tenants().then((res) => setTenants(Array.isArray(res.items) ? res.items : []));
 
   useEffect(() => {
     load();

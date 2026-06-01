@@ -70,11 +70,15 @@ export default function TenantDetailPage() {
       <section>
         <h3 className="font-semibold text-white mb-2">Users</h3>
         <ul className="text-sm space-y-1">
-          {tenant.users.map((u) => (
-            <li key={u.id} className="text-slate-300">
-              {u.name} — {u.email} <span className="text-slate-500">({u.role})</span>
-            </li>
-          ))}
+          {Array.isArray(tenant.users) && tenant.users.length > 0 ? (
+            tenant.users.map((u) => (
+              <li key={u.id} className="text-slate-300">
+                {u.name} — {u.email} <span className="text-slate-500">({u.role})</span>
+              </li>
+            ))
+          ) : (
+            <li className="text-slate-500">No users</li>
+          )}
         </ul>
       </section>
     </div>

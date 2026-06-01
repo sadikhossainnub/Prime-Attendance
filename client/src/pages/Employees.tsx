@@ -13,7 +13,7 @@ export default function Employees() {
     try {
       setError(null);
       const result = await portalApi.mappings();
-      setMappings(result);
+      setMappings(Array.isArray(result) ? result : []);
     } catch (err) {
       console.error("Failed to load mappings:", err);
       setError(err instanceof Error ? err.message : "Failed to load mappings");

@@ -49,6 +49,7 @@ export default function Attendance() {
   };
 
   const exportCsv = () => {
+    if (!Array.isArray(items) || items.length === 0) return;
     const header = "pin,time,device,in_out\n";
     const body = items.map((r) => `${r.userPin},${r.punchedAt},${r.deviceSn},${r.inOutMode ?? ""}`).join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });

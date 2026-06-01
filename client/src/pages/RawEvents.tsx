@@ -11,7 +11,7 @@ export default function RawEvents() {
       setError(null);
       setLoading(true);
       const r = await portalApi.rawEvents(100);
-      setEvents(r);
+      setEvents(Array.isArray(r) ? r : []);
     } catch (err) {
       console.error("Failed to load raw events:", err);
       setError(err instanceof Error ? err.message : "Failed to load raw events");
