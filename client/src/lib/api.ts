@@ -169,6 +169,7 @@ export interface AttendanceLog {
   punchedAt: string;
   inOutMode: number | null;
   syncStatus: string;
+  employeeName?: string | null;
 }
 
 export interface AttendanceResponse {

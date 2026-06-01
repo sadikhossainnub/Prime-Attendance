@@ -99,7 +99,7 @@ export default function Attendance() {
       <div className="flex flex-wrap gap-3 items-end">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
-        <input placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-24" />
+        <input placeholder="ID" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-24" />
         <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm disabled:opacity-50">
           {loading ? "Loading..." : "Filter"}
         </button>
@@ -108,7 +108,8 @@ export default function Attendance() {
         <table className="w-full text-sm">
           <thead className="bg-slate-900 text-slate-400">
             <tr>
-              <th className="text-left p-3">PIN</th>
+              <th className="text-left p-3">ID</th>
+              <th className="text-left p-3">Name</th>
               <th className="text-left p-3">Time</th>
               <th className="text-left p-3">Device</th>
               <th className="text-left p-3">In/Out</th>
@@ -116,13 +117,14 @@ export default function Attendance() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={4} className="p-4 text-center text-slate-500">লোড হচ্ছে...</td></tr>
+              <tr><td colSpan={5} className="p-4 text-center text-slate-500">লোড হচ্ছে...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={4} className="p-4 text-center text-slate-500">কোনো রেকর্ড নেই</td></tr>
+              <tr><td colSpan={5} className="p-4 text-center text-slate-500">কোনো রেকর্ড নেই</td></tr>
             ) : (
               items.map((r) => (
                 <tr key={r.id} className="border-t border-slate-800">
-                  <td className="p-3 font-mono">{r.userPin}</td>
+                  <td className="p-3 font-mono text-xs">{r.id}</td>
+                  <td className="p-3">{r.employeeName ?? "—"}</td>
                   <td className="p-3">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
                   <td className="p-3 font-mono text-xs">{r.deviceSn}</td>
                   <td className="p-3">{r.inOutMode === 1 ? "OUT" : r.inOutMode === 0 ? "IN" : "—"}</td>

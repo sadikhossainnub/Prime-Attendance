@@ -186,6 +186,13 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
     const [items, total] = await Promise.all([
       prisma.attendanceLog.findMany({
         where,
+        include: {
+          tenant: {
+            select: {
+              id: true,
+            },
+          },
+        },
         orderBy: { punchedAt: "desc" },
         skip,
         take: limit,
@@ -193,7 +200,23 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
       prisma.attendanceLog.count({ where }),
     ]);
 
-    res.json({ items, total, page, limit, totalPages: Math.ceil(total / limit) });
+    // Enrich with employee names
+    const enrichedItems = await Promise.all(
+      items.map(async (item) => {
+        const mapping = await prisma.employeeMapping.findUnique({
+          where: {
+            tenantId_userPin: { tenantId: tid, userPin: item.userPin },
+          },
+          select: { employeeName: true },
+        });
+        return {
+          ...item,
+          employeeName: mapping?.employeeName ?? null,
+        };
+      })
+    );
+
+    res.json({ items: enrichedItems, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (err) {
     console.error("Attendance error:", err);
     res.status(500).json({ error: "Failed to load attendance" });

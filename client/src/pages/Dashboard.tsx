@@ -53,7 +53,7 @@ export default function Dashboard() {
         <Card title="আজকের পাঞ্চ" value={data.punchToday} />
         <Card title="অনলাইন ডিভাইস" value={data.onlineDevices} subtitle={`মোট ${data.totalDevices}`} />
         <Card title="ডিভাইস" value={data.totalDevices} />
-        <Card title="কর্মচারী (PIN)" value={data.totalEmployees} />
+        <Card title="কর্মচারী (ID)" value={data.totalEmployees} />
       </div>
       <section>
         <h3 className="text-lg font-semibold text-white mb-3">সাম্প্রতিক পাঞ্চ</h3>
@@ -61,7 +61,7 @@ export default function Dashboard() {
           <table className="w-full text-sm">
             <thead className="bg-slate-900 text-slate-400">
               <tr>
-                <th className="text-left p-3">PIN</th>
+                <th className="text-left p-3">ID</th>
                 <th className="text-left p-3">Time</th>
                 <th className="text-left p-3">Device</th>
               </tr>
