@@ -36,8 +36,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const me = await authApi.me();
-      setUser(me as AuthUser);
-    } catch {
+      // Validate response structure before setting user
+      if (me && typeof me === "object" && "id" in me && "email" in me) {
+        setUser(me as AuthUser);
+      } else {
+        console.error("Invalid user response structure:", me);
+        clearSession();
+        setUser(null);
+      }
+    } catch (err) {
+      console.error("Failed to refresh auth:", err);
       clearSession();
       setUser(null);
     } finally {

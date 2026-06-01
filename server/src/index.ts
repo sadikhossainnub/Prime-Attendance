@@ -17,6 +17,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+// Rate limiters
 const iclockLimiter = rateLimit({
   windowMs: 1000,
   max: 30,
@@ -24,8 +25,27 @@ const iclockLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-app.use(cors({ origin: true, credentials: true }));
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 attempts per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many login attempts, please try again later",
+  skip: (req) => req.method !== "POST", // Only rate limit POST requests
+});
 
+// CORS configuration - restrict in production
+const corsOptions = {
+  origin: config.cors.origin,
+  credentials: true,
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  maxAge: 86400, // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// iClock endpoint - raw binary data
 app.use("/iclock", iclockLimiter);
 app.use(
   "/iclock",
@@ -51,6 +71,9 @@ app.get("/health", async (_req, res) => {
   }
 });
 
+// Apply rate limiting to auth routes
+app.use("/api/auth/login", authLimiter);
+
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/portal", portalRouter);
@@ -74,11 +97,17 @@ app.get("*", (req, res, next) => {
 });
 
 async function start() {
-  await seedSuperAdmin();
-  app.listen(config.port, "0.0.0.0", () => {
-    console.log(`Prime Attendance SaaS on port ${config.port}`);
-    console.log(`Super admin: ${config.superAdmin.email}`);
-  });
+  try {
+    await seedSuperAdmin();
+    app.listen(config.port, "0.0.0.0", () => {
+      console.log(`Prime Attendance SaaS on port ${config.port}`);
+      console.log(`Super admin: ${config.superAdmin.email}`);
+      console.log(`Environment: ${config.nodeEnv}`);
+    });
+  } catch (err) {
+    console.error("Failed to start:", err);
+    process.exit(1);
+  }
 }
 
 start().catch((err) => {

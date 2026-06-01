@@ -12,25 +12,41 @@ export default function Attendance() {
   const [items, setItems] = useState<AttendanceLog[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const load = () => {
-    const params = new URLSearchParams({ page: String(page), limit: "50" });
-    if (from) params.set("from", new Date(from).toISOString());
-    if (to) {
-      const end = new Date(to);
-      end.setHours(23, 59, 59, 999);
-      params.set("to", end.toISOString());
-    }
-    if (pin) params.set("pin", pin);
-    portalApi.attendance(params).then((r) => {
+  const load = async (pageNum: number = 1) => {
+    try {
+      setError(null);
+      setLoading(true);
+      const params = new URLSearchParams({ page: String(pageNum), limit: "50" });
+      if (from) params.set("from", new Date(from).toISOString());
+      if (to) {
+        const end = new Date(to);
+        end.setHours(23, 59, 59, 999);
+        params.set("to", end.toISOString());
+      }
+      if (pin) params.set("pin", pin);
+      const r = await portalApi.attendance(params);
       setItems(r.items);
       setTotal(r.total);
-    });
+      setPage(pageNum);
+    } catch (err) {
+      console.error("Failed to load attendance:", err);
+      setError(err instanceof Error ? err.message : "Failed to load attendance");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    load();
+    load(page);
   }, [page]);
+
+  const handleFilter = () => {
+    setPage(1);
+    load(1);
+  };
 
   const exportCsv = () => {
     const header = "pin,time,device,in_out\n";
@@ -42,6 +58,20 @@ export default function Attendance() {
     a.click();
   };
 
+  const handleSyncRetry = async () => {
+    if (!confirm("Sync retry শুরু করবেন?")) return;
+    try {
+      setError(null);
+      const r = await portalApi.syncRetry();
+      alert(r.message);
+    } catch (err) {
+      console.error("Sync retry failed:", err);
+      setError(err instanceof Error ? err.message : "Sync retry failed");
+    }
+  };
+
+  const totalPages = Math.ceil(total / 50);
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
@@ -52,11 +82,7 @@ export default function Attendance() {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => {
-              if (confirm("Sync retry শুরু করবেন?")) {
-                portalApi.syncRetry().then((r) => alert(r.message));
-              }
-            }}
+            onClick={handleSyncRetry}
             className="px-4 py-2 rounded-lg bg-indigo-600 text-sm"
           >
             Sync ERPNext
@@ -64,11 +90,18 @@ export default function Attendance() {
           <button type="button" onClick={exportCsv} disabled={!items.length} className="px-4 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-40">CSV</button>
         </div>
       </div>
+      {error && (
+        <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300">
+          {error}
+        </div>
+      )}
       <div className="flex flex-wrap gap-3 items-end">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
         <input placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-24" />
-        <button type="button" onClick={() => { setPage(1); load(); }} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm">Filter</button>
+        <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm disabled:opacity-50">
+          {loading ? "Loading..." : "Filter"}
+        </button>
       </div>
       <div className="rounded-xl border border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
@@ -81,17 +114,44 @@ export default function Attendance() {
             </tr>
           </thead>
           <tbody>
-            {items.map((r) => (
-              <tr key={r.id} className="border-t border-slate-800">
-                <td className="p-3 font-mono">{r.userPin}</td>
-                <td className="p-3">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
-                <td className="p-3 font-mono text-xs">{r.deviceSn}</td>
-                <td className="p-3">{r.inOutMode === 1 ? "OUT" : r.inOutMode === 0 ? "IN" : "—"}</td>
-              </tr>
-            ))}
+            {loading ? (
+              <tr><td colSpan={4} className="p-4 text-center text-slate-500">লোড হচ্ছে...</td></tr>
+            ) : items.length === 0 ? (
+              <tr><td colSpan={4} className="p-4 text-center text-slate-500">কোনো রেকর্ড নেই</td></tr>
+            ) : (
+              items.map((r) => (
+                <tr key={r.id} className="border-t border-slate-800">
+                  <td className="p-3 font-mono">{r.userPin}</td>
+                  <td className="p-3">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
+                  <td className="p-3 font-mono text-xs">{r.deviceSn}</td>
+                  <td className="p-3">{r.inOutMode === 1 ? "OUT" : r.inOutMode === 0 ? "IN" : "—"}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page === 1}
+            className="px-3 py-1 rounded bg-slate-800 text-sm disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="px-3 py-1 text-sm text-slate-400">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
+            disabled={page === totalPages}
+            className="px-3 py-1 rounded bg-slate-800 text-sm disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

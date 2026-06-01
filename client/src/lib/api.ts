@@ -1,5 +1,8 @@
 import { getToken, clearSession, type AuthUser } from "./auth";
 
+/**
+ * Enhanced API fetch with proper error handling and type safety
+ */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
   const res = await fetch(path, {
@@ -18,8 +21,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { error?: string }).error ?? "Request failed");
+    let errorMessage = res.statusText;
+    try {
+      const err = await res.json();
+      errorMessage = (err as { error?: string }).error ?? res.statusText;
+    } catch {
+      // If response is not JSON, use status text
+    }
+    throw new Error(errorMessage);
   }
 
   if (res.status === 204) return undefined as T;
@@ -41,9 +50,15 @@ export const adminApi = {
     deviceCount: number;
     punchToday: number;
     userCount: number;
-    recentTenants: unknown[];
+    recentTenants: TenantRow[];
   }>("/api/admin/stats"),
-  tenants: () => apiFetch<TenantRow[]>("/api/admin/tenants"),
+  tenants: (page?: number, limit?: number) => apiFetch<{
+    items: TenantRow[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }>(`/api/admin/tenants?page=${page ?? 1}&limit=${limit ?? 20}`),
   tenant: (id: string) => apiFetch<TenantDetail>(`/api/admin/tenants/${id}`),
   createTenant: (data: CreateTenantInput) =>
     apiFetch<TenantDetail>("/api/admin/tenants", {
@@ -82,7 +97,7 @@ export const portalApi = {
   attendance: (params: URLSearchParams) =>
     apiFetch<AttendanceResponse>(`/api/portal/attendance?${params}`),
   syncRetry: () => apiFetch<{ message: string; count: number }>("/api/portal/sync-retry", { method: "POST" }),
-  rawEvents: (limit?: number) => apiFetch<unknown[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
+  rawEvents: (limit?: number) => apiFetch<DeviceRawEvent[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
   mappings: () => apiFetch<EmployeeMapping[]>("/api/portal/employees/mapping"),
   saveMapping: (data: {
     userPin: string;
@@ -100,6 +115,7 @@ export const portalApi = {
   settings: () => apiFetch<TenantSettings>("/api/portal/settings"),
 };
 
+// Type definitions
 export interface TenantRow {
   id: string;
   name: string;
@@ -150,6 +166,7 @@ export interface AttendanceResponse {
   total: number;
   page: number;
   limit: number;
+  totalPages: number;
 }
 
 export interface EmployeeMapping {
@@ -159,18 +176,32 @@ export interface EmployeeMapping {
   erpnextEmployeeId: string | null;
 }
 
+export interface DeviceRawEvent {
+  id: string;
+  tenantId?: string;
+  deviceSn?: string;
+  method: string;
+  path: string;
+  query?: string;
+  bodyPreview?: string;
+  createdAt: string;
+}
+
 export interface PortalDashboard {
   punchToday: number;
   onlineDevices: number;
   totalDevices: number;
   totalEmployees: number;
   recentPunches: AttendanceLog[];
+  erpnextEnabled: boolean;
 }
 
 export interface TenantSettings {
+  id: string;
   slug: string;
   name: string;
   deviceProvisionKey: string;
   plan: string;
   status: string;
+  contactEmail: string | null;
 }

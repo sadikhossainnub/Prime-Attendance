@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { UserRole } from "@prisma/client";
 import { verifyToken, type JwtPayload } from "../services/auth.js";
+import { prisma } from "../lib/prisma.js";
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
@@ -42,7 +43,11 @@ export function requireSuperAdmin(
   next();
 }
 
-export function requireTenantUser(
+/**
+ * Middleware to check tenant access and status
+ * Ensures user has a valid tenantId and tenant is not suspended
+ */
+export async function requireTenantUser(
   req: AuthRequest,
   res: Response,
   next: NextFunction
@@ -51,5 +56,27 @@ export function requireTenantUser(
     res.status(403).json({ error: "Tenant access required" });
     return;
   }
-  next();
+
+  try {
+    // Check if tenant exists and is not suspended
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: req.user.tenantId },
+      select: { id: true, status: true },
+    });
+
+    if (!tenant) {
+      res.status(403).json({ error: "Tenant not found" });
+      return;
+    }
+
+    if (tenant.status === "SUSPENDED") {
+      res.status(403).json({ error: "Tenant account is suspended" });
+      return;
+    }
+
+    next();
+  } catch (err) {
+    console.error("Error checking tenant status:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
 }

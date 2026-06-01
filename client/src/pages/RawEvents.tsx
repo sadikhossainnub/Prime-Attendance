@@ -1,16 +1,23 @@
 import { useEffect, useState } from "react";
-import { portalApi } from "../lib/api";
+import { portalApi, type DeviceRawEvent } from "../lib/api";
 
 export default function RawEvents() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<DeviceRawEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    portalApi.rawEvents(100).then((r) => {
+  const load = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      const r = await portalApi.rawEvents(100);
       setEvents(r);
+    } catch (err) {
+      console.error("Failed to load raw events:", err);
+      setError(err instanceof Error ? err.message : "Failed to load raw events");
+    } finally {
       setLoading(false);
-    });
+    }
   };
 
   useEffect(() => {
@@ -22,16 +29,23 @@ export default function RawEvents() {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold text-white">Device Raw Events</h2>
-          <p className="text-slate-400 text-sm">ডিভাইস থেকে আসা লেটেস্ট ১০০টি রিকোয়েস্ট</p>
+          <p className="text-slate-400 text-sm">Latest 100 device requests</p>
         </div>
         <button
           type="button"
           onClick={load}
-          className="px-4 py-2 rounded-lg bg-slate-800 text-sm"
+          disabled={loading}
+          className="px-4 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-50"
         >
-          Refresh
+          {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
+
+      {error && (
+        <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300">
+          {error}
+        </div>
+      )}
 
       <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-900/50">
         <div className="overflow-x-auto">
@@ -54,14 +68,14 @@ export default function RawEvents() {
               ) : events.length === 0 ? (
                 <tr>
                   <td colSpan={4} className="p-8 text-center text-slate-500">
-                    No events found. ডিভাইস কানেক্ট করুন।
+                    No events found
                   </td>
                 </tr>
               ) : (
                 events.map((ev) => (
                   <tr key={ev.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="p-4 whitespace-nowrap text-slate-300">
-                      {new Date(ev.createdAt).toLocaleString("bn-BD")}
+                      {new Date(ev.createdAt).toLocaleString()}
                     </td>
                     <td className="p-4 font-mono text-indigo-400">{ev.deviceSn || "N/A"}</td>
                     <td className="p-4">

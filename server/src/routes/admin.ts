@@ -10,6 +10,16 @@ import { hashPassword, generateProvisionKey } from "../services/auth.js";
 export const adminRouter = Router();
 adminRouter.use(requireAuth, requireSuperAdmin);
 
+// Validate plan enum
+function isValidPlan(plan: unknown): plan is "STARTER" | "BUSINESS" | "ENTERPRISE" {
+  return plan === "STARTER" || plan === "BUSINESS" || plan === "ENTERPRISE";
+}
+
+// Validate tenant status enum
+function isValidStatus(status: unknown): status is "ACTIVE" | "SUSPENDED" | "TRIAL" {
+  return status === "ACTIVE" || status === "SUSPENDED" || status === "TRIAL";
+}
+
 adminRouter.get("/stats", async (_req, res: Response) => {
   const [tenantCount, deviceCount, punchToday, userCount] = await Promise.all([
     prisma.tenant.count(),
@@ -41,14 +51,31 @@ adminRouter.get("/stats", async (_req, res: Response) => {
   });
 });
 
-adminRouter.get("/tenants", async (_req, res: Response) => {
-  const tenants = await prisma.tenant.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: { select: { devices: true, users: true, attendanceLogs: true } },
-    },
+adminRouter.get("/tenants", async (req, res: Response) => {
+  // Pagination support
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+  const skip = (page - 1) * limit;
+
+  const [tenants, total] = await Promise.all([
+    prisma.tenant.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit,
+      include: {
+        _count: { select: { devices: true, users: true, attendanceLogs: true } },
+      },
+    }),
+    prisma.tenant.count(),
+  ]);
+
+  res.json({
+    items: tenants,
+    total,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
   });
-  res.json(tenants);
 });
 
 adminRouter.post("/tenants", async (req, res: Response) => {
@@ -64,7 +91,7 @@ adminRouter.post("/tenants", async (req, res: Response) => {
   } = req.body as {
     name?: string;
     slug?: string;
-    plan?: "STARTER" | "BUSINESS" | "ENTERPRISE";
+    plan?: unknown;
     contactEmail?: string;
     contactPhone?: string;
     adminName?: string;
@@ -72,10 +99,33 @@ adminRouter.post("/tenants", async (req, res: Response) => {
     adminPassword?: string;
   };
 
+  // Input validation
   if (!name || !slug || !adminEmail || !adminPassword || !adminName) {
     res.status(400).json({
       error: "name, slug, adminName, adminEmail, adminPassword required",
     });
+    return;
+  }
+
+  if (typeof name !== "string" || name.trim().length === 0) {
+    res.status(400).json({ error: "name must be a non-empty string" });
+    return;
+  }
+
+  if (typeof slug !== "string" || slug.trim().length === 0) {
+    res.status(400).json({ error: "slug must be a non-empty string" });
+    return;
+  }
+
+  // Validate plan if provided
+  if (plan !== undefined && !isValidPlan(plan)) {
+    res.status(400).json({ error: "plan must be STARTER, BUSINESS, or ENTERPRISE" });
+    return;
+  }
+
+  // Validate password strength (minimum 8 characters)
+  if (typeof adminPassword !== "string" || adminPassword.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
     return;
   }
 
@@ -100,7 +150,7 @@ adminRouter.post("/tenants", async (req, res: Response) => {
     data: {
       name,
       slug: normalizedSlug,
-      plan: plan ?? "STARTER",
+      plan: (plan as "STARTER" | "BUSINESS" | "ENTERPRISE") ?? "STARTER",
       status: "TRIAL",
       deviceProvisionKey: generateProvisionKey(),
       contactEmail,
@@ -122,17 +172,36 @@ adminRouter.post("/tenants", async (req, res: Response) => {
 
 adminRouter.patch("/tenants/:id", async (req, res: Response) => {
   const { id } = req.params;
-  const { name, status, plan, contactEmail, contactPhone } = req.body;
+  const { name, status, plan, contactEmail, contactPhone } = req.body as {
+    name?: unknown;
+    status?: unknown;
+    plan?: unknown;
+    contactEmail?: unknown;
+    contactPhone?: unknown;
+  };
+
+  // Validate status if provided
+  if (status !== undefined && !isValidStatus(status)) {
+    res.status(400).json({ error: "status must be ACTIVE, SUSPENDED, or TRIAL" });
+    return;
+  }
+
+  // Validate plan if provided
+  if (plan !== undefined && !isValidPlan(plan)) {
+    res.status(400).json({ error: "plan must be STARTER, BUSINESS, or ENTERPRISE" });
+    return;
+  }
+
+  const updateData: Record<string, unknown> = {};
+  if (name && typeof name === "string") updateData.name = name;
+  if (status && isValidStatus(status)) updateData.status = status;
+  if (plan && isValidPlan(plan)) updateData.plan = plan;
+  if (contactEmail !== undefined) updateData.contactEmail = contactEmail || null;
+  if (contactPhone !== undefined) updateData.contactPhone = contactPhone || null;
 
   const tenant = await prisma.tenant.update({
     where: { id: String(id) },
-    data: {
-      ...(name && { name }),
-      ...(status && { status }),
-      ...(plan && { plan }),
-      ...(contactEmail !== undefined && { contactEmail }),
-      ...(contactPhone !== undefined && { contactPhone }),
-    },
+    data: updateData,
   });
   res.json(tenant);
 });
@@ -169,11 +238,23 @@ adminRouter.post("/tenants/:id/users", async (req, res: Response) => {
     email?: string;
     password?: string;
     name?: string;
-    role?: "TENANT_ADMIN" | "TENANT_USER";
+    role?: unknown;
   };
 
   if (!email || !password || !name) {
     res.status(400).json({ error: "email, password, name required" });
+    return;
+  }
+
+  // Validate password strength
+  if (typeof password !== "string" || password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+
+  // Validate role if provided
+  if (role !== undefined && role !== "TENANT_ADMIN" && role !== "TENANT_USER") {
+    res.status(400).json({ error: "role must be TENANT_ADMIN or TENANT_USER" });
     return;
   }
 
@@ -183,7 +264,7 @@ adminRouter.post("/tenants/:id/users", async (req, res: Response) => {
       email: email.toLowerCase().trim(),
       passwordHash: await hashPassword(password),
       name,
-      role: role ?? "TENANT_USER",
+      role: (role as "TENANT_ADMIN" | "TENANT_USER") ?? "TENANT_USER",
     },
   });
 

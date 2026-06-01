@@ -10,10 +10,38 @@ export default function Dashboard() {
     totalEmployees: 0,
     recentPunches: [] as AttendanceLog[],
   });
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    portalApi.dashboard().then(setData);
+    const loadDashboard = async () => {
+      try {
+        setError(null);
+        const result = await portalApi.dashboard();
+        setData(result);
+      } catch (err) {
+        console.error("Failed to load dashboard:", err);
+        setError(err instanceof Error ? err.message : "Failed to load dashboard");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
   }, []);
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Dashboard</h2>
+        </div>
+        <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300">
+          {error}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -39,7 +67,9 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {data.recentPunches.length === 0 ? (
+              {loading ? (
+                <tr><td colSpan={3} className="p-4 text-slate-500">লোড হচ্ছে...</td></tr>
+              ) : data.recentPunches.length === 0 ? (
                 <tr><td colSpan={3} className="p-4 text-slate-500">কোনো পাঞ্চ নেই</td></tr>
               ) : (
                 data.recentPunches.map((p) => (
