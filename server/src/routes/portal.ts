@@ -186,13 +186,6 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
     const [items, total] = await Promise.all([
       prisma.attendanceLog.findMany({
         where,
-        include: {
-          tenant: {
-            select: {
-              id: true,
-            },
-          },
-        },
         orderBy: { punchedAt: "desc" },
         skip,
         take: limit,
@@ -200,21 +193,26 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
       prisma.attendanceLog.count({ where }),
     ]);
 
-    // Enrich with employee names
-    const enrichedItems = await Promise.all(
-      items.map(async (item) => {
-        const mapping = await prisma.employeeMapping.findUnique({
-          where: {
-            tenantId_userPin: { tenantId: tid, userPin: item.userPin },
-          },
-          select: { employeeName: true },
-        });
-        return {
-          ...item,
-          employeeName: mapping?.employeeName ?? null,
-        };
-      })
-    );
+    // Get all unique PINs from items
+    const uniquePins = [...new Set(items.map(item => item.userPin))];
+
+    // Fetch all mappings in one query
+    const mappings = await prisma.employeeMapping.findMany({
+      where: {
+        tenantId: tid,
+        userPin: { in: uniquePins },
+      },
+      select: { userPin: true, employeeName: true },
+    });
+
+    // Create a map for quick lookup
+    const mappingMap = new Map(mappings.map(m => [m.userPin, m.employeeName]));
+
+    // Enrich items with employee names
+    const enrichedItems = items.map(item => ({
+      ...item,
+      employeeName: mappingMap.get(item.userPin) ?? null,
+    }));
 
     res.json({ items: enrichedItems, total, page, limit, totalPages: Math.ceil(total / limit) });
   } catch (err) {
