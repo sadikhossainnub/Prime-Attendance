@@ -23,10 +23,13 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "7788:7788"
+      - "7788:7788"      # ← এটাও রাখো
+    volumes:
+      - ./client/dist:/app/client/dist:ro   # ← client dist serve করার জন্য
     environment:
       DATABASE_URL: postgresql://prime:prime_secret@postgres:5432/prime_attendance
       PORT: 7788
+      CLIENT_DIST_PATH: /app/client/dist    # ← এটা add করো
       JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret-min-32-chars}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@primetechbd.xyz}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-Admin@12345}

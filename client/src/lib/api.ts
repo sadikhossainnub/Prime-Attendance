@@ -113,6 +113,16 @@ export const portalApi = {
       method: "DELETE",
     }),
   settings: () => apiFetch<TenantSettings>("/api/portal/settings"),
+  updateErpnextConfig: (config: {
+    enabled: boolean;
+    url: string;
+    apiKey: string;
+    apiSecret: string;
+  }) =>
+    apiFetch<TenantSettings>("/api/portal/settings/erpnext", {
+      method: "PATCH",
+      body: JSON.stringify(config),
+    }),
 };
 
 // Type definitions
@@ -204,4 +214,9 @@ export interface TenantSettings {
   plan: string;
   status: string;
   contactEmail: string | null;
+  // ERPNext fields
+  erpnextEnabled?: boolean;
+  erpnextUrl?: string | null;
+  erpnextApiKey?: string | null;
+  erpnextApiSecret?: string | null;
 }

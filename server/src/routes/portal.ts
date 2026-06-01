@@ -1,11 +1,11 @@
-import { Router, type Request, type Response } from "express";
+import { Router, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
 import {
   requireAuth,
   requireTenantUser,
   type AuthRequest,
 } from "../middleware/auth.js";
-import { isErpnextEnabled, queueAttendanceSync } from "../services/erpnext.js";
+import { isErpnextEnabledForTenant, queueAttendanceSync } from "../services/erpnext.js";
 
 export const portalRouter = Router();
 portalRouter.use(requireAuth, requireTenantUser);
@@ -47,7 +47,7 @@ portalRouter.get("/dashboard", async (req: AuthRequest, res: Response) => {
     end.setHours(23, 59, 59, 999);
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
 
-    const [punchToday, onlineDevices, totalDevices, totalEmployees] =
+    const [punchToday, onlineDevices, totalDevices, totalEmployees, erpnextEnabled] =
       await Promise.all([
         prisma.attendanceLog.count({
           where: { tenantId: tid, punchedAt: { gte: start, lte: end } },
@@ -57,6 +57,7 @@ portalRouter.get("/dashboard", async (req: AuthRequest, res: Response) => {
         }),
         prisma.device.count({ where: { tenantId: tid } }),
         prisma.employeeMapping.count({ where: { tenantId: tid } }),
+        isErpnextEnabledForTenant(tid),
       ]);
 
     const recentPunches = await prisma.attendanceLog.findMany({
@@ -70,7 +71,7 @@ portalRouter.get("/dashboard", async (req: AuthRequest, res: Response) => {
       onlineDevices,
       totalDevices,
       totalEmployees,
-      erpnextEnabled: isErpnextEnabled(),
+      erpnextEnabled,
       recentPunches,
     });
   } catch (err) {
@@ -286,12 +287,71 @@ portalRouter.get("/settings", async (req: AuthRequest, res: Response) => {
         status: true,
         deviceProvisionKey: true,
         contactEmail: true,
+        erpnextEnabled: true,
+        erpnextUrl: true,
+        erpnextApiKey: true,
+        erpnextApiSecret: true,
       },
     });
     res.json(tenant);
   } catch (err) {
     console.error("Settings error:", err);
     res.status(500).json({ error: "Failed to load settings" });
+  }
+});
+
+/**
+ * Update ERPNext configuration for tenant
+ * Only tenant admin can update
+ */
+portalRouter.patch("/settings/erpnext", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { enabled, url, apiKey, apiSecret } = req.body as {
+      enabled?: boolean;
+      url?: string;
+      apiKey?: string;
+      apiSecret?: string;
+    };
+
+    // Validate ERPNext URL if enabled
+    if (enabled && url) {
+      try {
+        new URL(url);
+      } catch {
+        res.status(400).json({ error: "Invalid ERPNext URL" });
+        return;
+      }
+    }
+
+    const tenant = await prisma.tenant.update({
+      where: { id: tid },
+      data: {
+        erpnextEnabled: enabled ?? false,
+        erpnextUrl: url || null,
+        erpnextApiKey: apiKey || null,
+        erpnextApiSecret: apiSecret || null,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        plan: true,
+        status: true,
+        deviceProvisionKey: true,
+        contactEmail: true,
+        erpnextEnabled: true,
+        erpnextUrl: true,
+        erpnextApiKey: true,
+        erpnextApiSecret: true,
+      },
+    });
+
+    console.log(`[portal] ERPNext config updated for tenant=${tenant.slug}, enabled=${enabled}`);
+    res.json(tenant);
+  } catch (err) {
+    console.error("ERPNext config error:", err);
+    res.status(500).json({ error: "Failed to update ERPNext configuration" });
   }
 });
 
@@ -316,8 +376,10 @@ portalRouter.get("/raw-events", async (req: AuthRequest, res: Response) => {
 portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
   try {
     const tid = tenantId(req);
-    if (!isErpnextEnabled()) {
-      res.status(400).json({ error: "ERPNext sync is not enabled" });
+    const erpnextEnabled = await isErpnextEnabledForTenant(tid);
+    
+    if (!erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext sync is not enabled for this tenant" });
       return;
     }
 
@@ -336,6 +398,7 @@ portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
       void queueAttendanceSync(log.id);
     }
 
+    console.log(`[portal] Sync retry triggered: tenant=${tid}, count=${logs.length}`);
     res.json({
       message: `Triggered sync retry for ${logs.length} logs`,
       count: logs.length,

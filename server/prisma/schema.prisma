@@ -34,6 +34,13 @@ model Tenant {
   deviceProvisionKey String      @map("device_provision_key")
   contactEmail      String?      @map("contact_email")
   contactPhone      String?      @map("contact_phone")
+  
+  // ERPNext Integration (Tenant-level)
+  erpnextEnabled    Boolean      @default(false) @map("erpnext_enabled")
+  erpnextUrl        String?      @map("erpnext_url")
+  erpnextApiKey     String?      @map("erpnext_api_key")
+  erpnextApiSecret  String?      @map("erpnext_api_secret")
+  
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 

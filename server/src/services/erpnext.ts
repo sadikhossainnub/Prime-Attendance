@@ -1,13 +1,29 @@
 import type { AttendanceLog } from "@prisma/client";
-import { config } from "../lib/config.js";
 import { prisma } from "../lib/prisma.js";
 
 /**
- * ERPNext sync stub — Phase 2.
- * When ERPNEXT_ENABLED=true, this will push Employee Checkin records.
+ * ERPNext sync service — Tenant-level integration.
+ * Fetches tenant-specific ERPNext config and syncs attendance logs.
  */
 export async function queueAttendanceSync(logId: string): Promise<void> {
-  if (!config.erpnext.enabled) {
+  const log = await prisma.attendanceLog.findUnique({ where: { id: logId } });
+  if (!log) return;
+
+  // Fetch tenant's ERPNext config
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: log.tenantId },
+    select: {
+      id: true,
+      slug: true,
+      erpnextEnabled: true,
+      erpnextUrl: true,
+      erpnextApiKey: true,
+      erpnextApiSecret: true,
+    },
+  });
+
+  if (!tenant?.erpnextEnabled) {
+    console.log(`[erpnext] Sync skipped for tenant=${tenant?.slug}, log=${logId}: ERPNext disabled`);
     await prisma.attendanceLog.update({
       where: { id: logId },
       data: { syncStatus: "SKIPPED" },
@@ -15,11 +31,8 @@ export async function queueAttendanceSync(logId: string): Promise<void> {
     return;
   }
 
-  const log = await prisma.attendanceLog.findUnique({ where: { id: logId } });
-  if (!log) return;
-
   try {
-    await syncAttendanceToErpnext(log);
+    await syncAttendanceToErpnext(log, tenant);
     await prisma.attendanceLog.update({
       where: { id: logId },
       data: {
@@ -28,6 +41,7 @@ export async function queueAttendanceSync(logId: string): Promise<void> {
         syncError: null,
       },
     });
+    console.log(`[erpnext] Sync successful: tenant=${tenant.slug}, log=${logId}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown sync error";
     await prisma.attendanceLog.update({
@@ -37,15 +51,37 @@ export async function queueAttendanceSync(logId: string): Promise<void> {
         syncError: message,
       },
     });
+    console.error(`[erpnext] Sync failed: tenant=${tenant.slug}, log=${logId}, error=${message}`);
   }
 }
 
-async function syncAttendanceToErpnext(log: AttendanceLog): Promise<void> {
-  const { url, apiKey, apiSecret } = config.erpnext;
+interface TenantErpnextConfig {
+  id: string;
+  slug: string;
+  erpnextEnabled: boolean;
+  erpnextUrl: string | null;
+  erpnextApiKey: string | null;
+  erpnextApiSecret: string | null;
+}
+
+async function syncAttendanceToErpnext(
+  log: AttendanceLog,
+  tenant: TenantErpnextConfig
+): Promise<void> {
+  const { erpnextUrl: url, erpnextApiKey: apiKey, erpnextApiSecret: apiSecret } = tenant;
+
   if (!url || !apiKey || !apiSecret) {
-    throw new Error("ERPNext credentials not configured");
+    throw new Error("ERPNext credentials not configured for tenant");
   }
 
+  // Validate URL format
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(`Invalid ERPNext URL: ${url}`);
+  }
+
+  // Find employee mapping
   const mapping = await prisma.employeeMapping.findUnique({
     where: {
       tenantId_userPin: { tenantId: log.tenantId, userPin: log.userPin },
@@ -56,8 +92,11 @@ async function syncAttendanceToErpnext(log: AttendanceLog): Promise<void> {
     throw new Error(`No ERPNext employee mapping for PIN ${log.userPin}`);
   }
 
+  // Determine log type (IN/OUT)
   const logType = log.inOutMode === 1 ? "OUT" : "IN";
   const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee Checkin`;
+
+  console.log(`[erpnext] Syncing: tenant=${tenant.slug}, pin=${log.userPin}, type=${logType}, endpoint=${endpoint}`);
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -86,9 +125,17 @@ async function syncAttendanceToErpnext(log: AttendanceLog): Promise<void> {
       where: { id: log.id },
       data: { erpnextCheckinId: checkinId },
     });
+    console.log(`[erpnext] Checkin created: tenant=${tenant.slug}, checkinId=${checkinId}`);
   }
 }
 
-export function isErpnextEnabled(): boolean {
-  return config.erpnext.enabled;
+/**
+ * Check if ERPNext is enabled for a specific tenant
+ */
+export async function isErpnextEnabledForTenant(tenantId: string): Promise<boolean> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { erpnextEnabled: true },
+  });
+  return tenant?.erpnextEnabled ?? false;
 }
