@@ -7,8 +7,6 @@ services:
       POSTGRES_PASSWORD: prime_secret
       POSTGRES_DB: prime_attendance
       TZ: Asia/Dhaka
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,25 +17,19 @@ services:
 
   server:
     build:
-      context: ./server
+      context: .
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "7788:7788"      # ← এটাও রাখো
-    volumes:
-      - ./client/dist:/app/client/dist:ro   # ← client dist serve করার জন্য
+      - "7788:7788"
     environment:
       DATABASE_URL: postgresql://prime:prime_secret@postgres:5432/prime_attendance
       PORT: 7788
-      CLIENT_DIST_PATH: /app/client/dist    # ← এটা add করো
-      JWT_SECRET: ${JWT_SECRET:-change-me-jwt-secret-min-32-chars}
+      JWT_SECRET: ${JWT_SECRET:-prime-attendance-jwt-secret-32chars!!}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@primetechbd.xyz}
       SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-Admin@12345}
       TZ: Asia/Dhaka
       ERPNEXT_ENABLED: ${ERPNEXT_ENABLED:-false}
-      ERPNEXT_URL: ${ERPNEXT_URL:-}
-      ERPNEXT_API_KEY: ${ERPNEXT_API_KEY:-}
-      ERPNEXT_API_SECRET: ${ERPNEXT_API_SECRET:-}
     depends_on:
       postgres:
         condition: service_healthy
