@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { Home } from "./pages/Home";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
 import AdminLayout from "./layouts/AdminLayout";
 import PortalLayout from "./layouts/PortalLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -13,12 +15,13 @@ import Devices from "./pages/Devices";
 import Employees from "./pages/Employees";
 import Settings from "./pages/Settings";
 import RawEvents from "./pages/RawEvents";
+import { Billing } from "./pages/Billing";
 import { isSuperAdmin } from "./lib/auth";
 
 function HomeRedirect() {
   const { user, loading } = useAuth();
   if (loading) return <div className="min-h-screen flex items-center justify-center text-slate-400">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Home />;
   return <Navigate to={isSuperAdmin(user) ? "/admin" : "/portal"} replace />;
 }
 
@@ -27,6 +30,7 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/" element={<HomeRedirect />} />
 
         <Route
@@ -55,6 +59,7 @@ export default function App() {
           <Route path="devices" element={<Devices />} />
           <Route path="employees" element={<Employees />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="billing" element={<Billing />} />
           <Route path="raw-events" element={<RawEvents />} />
         </Route>
 

@@ -25,6 +25,18 @@ enum TenantPlan {
   ENTERPRISE
 }
 
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
 model Tenant {
   id                String       @id @default(cuid())
   name              String
@@ -41,6 +53,15 @@ model Tenant {
   erpnextApiKey     String?      @map("erpnext_api_key")
   erpnextApiSecret  String?      @map("erpnext_api_secret")
   
+  // Billing & Subscription
+  billingCycle      BillingCycle @default(MONTHLY) @map("billing_cycle")
+  subscriptionStatus SubscriptionStatus @default(ACTIVE) @map("subscription_status")
+  subscriptionStartDate DateTime? @map("subscription_start_date")
+  subscriptionEndDate DateTime?  @map("subscription_end_date")
+  nextBillingDate   DateTime?   @map("next_billing_date")
+  monthlyPrice      Float       @default(0) @map("monthly_price")
+  yearlyPrice       Float       @default(0) @map("yearly_price")
+  
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
@@ -49,6 +70,9 @@ model Tenant {
   attendanceLogs   AttendanceLog[]
   employeeMappings EmployeeMapping[]
   rawEvents        DeviceRawEvent[]
+  payments         Payment[]
+  subscriptions    Subscription[]
+  invoices         Invoice[]
 
   @@map("tenants")
 }
@@ -153,4 +177,90 @@ model DeviceRawEvent {
   @@index([deviceSn])
   @@index([createdAt])
   @@map("device_raw_events")
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  BKASH
+  NAGAD
+  ROCKET
+  CARD
+}
+
+model Payment {
+  id                  String        @id @default(cuid())
+  tenantId            String        @map("tenant_id")
+  invoiceId           String        @map("invoice_id")
+  amount              Float
+  currency            String        @default("BDT")
+  method              PaymentMethod
+  status              PaymentStatus @default(INITIATED)
+  bkashPaymentId      String?       @map("bkash_payment_id")
+  bkashTransactionId  String?       @map("bkash_transaction_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  completedAt         DateTime?     @map("completed_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, invoiceId])
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+model Subscription {
+  id                String              @id @default(cuid())
+  tenantId          String              @map("tenant_id")
+  plan              TenantPlan
+  billingCycle      BillingCycle
+  status            SubscriptionStatus
+  amount            Float
+  currency          String              @default("BDT")
+  startDate         DateTime            @map("start_date")
+  endDate           DateTime?           @map("end_date")
+  nextBillingDate   DateTime            @map("next_billing_date")
+  autoRenew         Boolean             @default(true) @map("auto_renew")
+  cancelledAt       DateTime?           @map("cancelled_at")
+  cancelReason      String?             @map("cancel_reason")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([nextBillingDate])
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  tenantId          String        @map("tenant_id")
+  invoiceNumber     String        @map("invoice_number")
+  amount            Float
+  currency          String        @default("BDT")
+  status            String        @default("PENDING") // PENDING, PAID, OVERDUE, CANCELLED
+  billingPeriodStart DateTime     @map("billing_period_start")
+  billingPeriodEnd  DateTime      @map("billing_period_end")
+  dueDate           DateTime      @map("due_date")
+  paidAt            DateTime?     @map("paid_at")
+  description       String?
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
 }

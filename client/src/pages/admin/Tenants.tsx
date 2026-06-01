@@ -39,7 +39,7 @@ export default function Tenants() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-white">Clients</h2>
-          <p className="text-slate-400 text-sm">আপনার SaaS ক্লায়েন্ট (tenants)</p>
+          <p className="text-slate-400 text-sm">আপনার ক্লায়েন্ট (tenants)</p>
         </div>
         <button
           type="button"

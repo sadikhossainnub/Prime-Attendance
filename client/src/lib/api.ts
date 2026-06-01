@@ -41,6 +41,19 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ email, password }),
     }),
+  signup: (data: {
+    companyName: string;
+    slug: string;
+    adminName: string;
+    adminEmail: string;
+    adminPassword: string;
+    plan: "STARTER" | "BUSINESS" | "ENTERPRISE";
+    contactEmail?: string;
+  }) =>
+    apiFetch<{ token: string; user: AuthUser }>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   me: () => apiFetch<AuthUser & { tenant?: AuthUser["tenant"] & { deviceProvisionKey?: string } }>("/api/auth/me"),
 };
 
@@ -122,6 +135,22 @@ export const portalApi = {
     apiFetch<TenantSettings>("/api/portal/settings/erpnext", {
       method: "PATCH",
       body: JSON.stringify(config),
+    }),
+  // bKash Payment
+  initiateBkashPayment: (amount: number, invoiceId: string) =>
+    apiFetch<{ paymentURL: string; paymentID: string }>("/api/portal/payment/bkash/initiate", {
+      method: "POST",
+      body: JSON.stringify({ amount, invoiceId }),
+    }),
+  executeBkashPayment: (paymentID: string, trxID: string) =>
+    apiFetch<{ transactionStatus: string; trxID: string }>("/api/portal/payment/bkash/execute", {
+      method: "POST",
+      body: JSON.stringify({ paymentID, trxID }),
+    }),
+  queryBkashPayment: (paymentID: string) =>
+    apiFetch<{ transactionStatus: string; amount: number; trxID: string }>("/api/portal/payment/bkash/query", {
+      method: "POST",
+      body: JSON.stringify({ paymentID }),
     }),
 };
 
@@ -221,3 +250,95 @@ export interface TenantSettings {
   erpnextApiKey?: string | null;
   erpnextApiSecret?: string | null;
 }
+
+export interface BkashPaymentInitiate {
+  paymentURL: string;
+  paymentID: string;
+}
+
+export interface BkashPaymentExecute {
+  transactionStatus: string;
+  trxID: string;
+}
+
+export interface BkashPaymentQuery {
+  transactionStatus: string;
+  amount: number;
+  trxID: string;
+}
+
+export interface Subscription {
+  id: string;
+  tenantId: string;
+  plan: "STARTER" | "BUSINESS" | "ENTERPRISE";
+  billingCycle: "MONTHLY" | "YEARLY";
+  status: "ACTIVE" | "PAUSED" | "CANCELLED" | "EXPIRED";
+  amount: number;
+  currency: string;
+  startDate: string;
+  endDate: string | null;
+  nextBillingDate: string;
+  autoRenew: boolean;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Invoice {
+  id: string;
+  tenantId: string;
+  invoiceNumber: string;
+  amount: number;
+  currency: string;
+  status: "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
+  billingPeriodStart: string;
+  billingPeriodEnd: string;
+  dueDate: string;
+  paidAt: string | null;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PricingTier {
+  monthly: number;
+  yearly: number;
+}
+
+export interface PricingInfo {
+  STARTER: PricingTier;
+  BUSINESS: PricingTier;
+  ENTERPRISE: PricingTier;
+}
+
+export const billingApi = {
+  getSubscription: () =>
+    apiFetch<Subscription>("/api/billing/subscription"),
+  createSubscription: (plan: "STARTER" | "BUSINESS" | "ENTERPRISE", billingCycle: "MONTHLY" | "YEARLY") =>
+    apiFetch<{ subscription: Subscription; invoice: Invoice }>("/api/billing/subscription", {
+      method: "POST",
+      body: JSON.stringify({ plan, billingCycle }),
+    }),
+  getInvoices: (limit?: number) =>
+    apiFetch<Invoice[]>(`/api/billing/invoices?limit=${limit ?? 20}`),
+  getInvoice: (id: string) =>
+    apiFetch<Invoice>(`/api/billing/invoices/${id}`),
+  markInvoiceAsPaid: (id: string, paymentId: string) =>
+    apiFetch<Invoice>(`/api/billing/invoices/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify({ paymentId }),
+    }),
+  cancelSubscription: (reason?: string) =>
+    apiFetch<Subscription>("/api/billing/subscription/cancel", {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+  getPricing: () =>
+    apiFetch<PricingInfo>("/api/billing/pricing"),
+  upgradePlan: (newPlan: "STARTER" | "BUSINESS" | "ENTERPRISE") =>
+    apiFetch<{ subscription: Subscription; proratedAmount: number; message: string }>("/api/billing/subscription/upgrade", {
+      method: "POST",
+      body: JSON.stringify({ newPlan }),
+    }),
+};

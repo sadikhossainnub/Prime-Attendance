@@ -153,7 +153,7 @@ cd server
 npm run dev
 
 # Output-এ এই লাইন আসা উচিত:
-# Prime Attendance SaaS on port 7788
+# Prime Attendance on port 7788
 # Super admin: admin@primetechbd.xyz
 ```
 

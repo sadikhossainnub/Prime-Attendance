@@ -1,8 +1,8 @@
 # Prime Attendance
 
-ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স ডিভাইস থেকে **সরাসরি** পাঞ্চ ডেটা গ্রহণের **SaaS প্ল্যাটফর্ম**। প্রতিটি ক্লায়েন্টের আলাদা portal, ডেটা আলাদা (multi-tenant), আপনি super admin হিসেবে সব ক্লায়েন্ট ম্যানেজ করেন।
+ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স ডিভাইস থেকে **সরাসরি** পাঞ্চ ডেটা গ্রহণের **প্ল্যাটফর্ম**। প্রতিটি ক্লায়েন্টের আলাদা portal, ডেটা আলাদা (multi-tenant), আপনি super admin হিসেবে সব ক্লায়েন্ট ম্যানেজ করেন।
 
-## SaaS পোর্টাল
+## পোর্টাল
 
 | পোর্টাল | URL | কে ব্যবহার করে |
 |---------|-----|----------------|
@@ -16,7 +16,7 @@ ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স
 
 ## বৈশিষ্ট্য
 
-- **Multi-tenant SaaS** — প্রতি ক্লায়েন্ট আলাদা ডেটা
+- **Multi-tenant** — প্রতি ক্লায়েন্ট আলাদা ডেটা
 - ZKTeco ADMS push (`/iclock/*`) + provision key
 - **Super Admin:** ক্লায়েন্ট CRUD, suspend, global dashboard
 - **Client Portal:** dashboard, attendance, devices, PIN mapping
@@ -114,7 +114,7 @@ UI: `http://localhost:5173`
 
 ---
 
-## ক্লায়েন্ট ওয়ার্কফ্লো (SaaS)
+## ক্লায়েন্ট ওয়ার্কফ্লো
 
 1. **Super Admin** (`/admin`) → **Clients** → **New client** (কোম্পানি + admin user)
 2. ক্লায়েন্ট লগইন (`/portal`) → **Devices** → Serial Number যোগ করুন

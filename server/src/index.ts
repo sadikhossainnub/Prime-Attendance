@@ -9,6 +9,8 @@ import { iclockRouter } from "./routes/iclock.js";
 import { authRouter } from "./routes/auth.js";
 import { adminRouter } from "./routes/admin.js";
 import { portalRouter } from "./routes/portal.js";
+import { paymentRouter } from "./routes/payment.js";
+import { billingRouter } from "./routes/billing.js";
 import { seedSuperAdmin } from "./services/seed.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,7 +67,7 @@ app.use(express.json());
 app.get("/health", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", mode: "saas" });
+    res.json({ status: "ok", mode: "multi-tenant" });
   } catch {
     res.status(503).json({ status: "degraded" });
   }
@@ -77,6 +79,8 @@ app.use("/api/auth/login", authLimiter);
 app.use("/api/auth", authRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/portal", portalRouter);
+app.use("/api/payment", paymentRouter);
+app.use("/api/billing", billingRouter);
 
 const clientDist =
   process.env.CLIENT_DIST_PATH ??
@@ -100,7 +104,7 @@ async function start() {
   try {
     await seedSuperAdmin();
     app.listen(config.port, "0.0.0.0", () => {
-      console.log(`Prime Attendance SaaS on port ${config.port}`);
+      console.log(`Prime Attendance on port ${config.port}`);
       console.log(`Super admin: ${config.superAdmin.email}`);
       console.log(`Environment: ${config.nodeEnv}`);
     });

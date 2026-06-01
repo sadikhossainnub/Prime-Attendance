@@ -1,4 +1,4 @@
--- SaaS multi-tenant migration (fresh deploy; drops old single-tenant tables)
+-- Multi-tenant migration (fresh deploy; drops old single-tenant tables)
 
 DROP TABLE IF EXISTS "device_raw_events" CASCADE;
 DROP TABLE IF EXISTS "employee_mappings" CASCADE;

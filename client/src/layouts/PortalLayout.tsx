@@ -23,6 +23,7 @@ export default function PortalLayout() {
           <NavLink to="/portal/devices" className={navClass}>Devices</NavLink>
           <NavLink to="/portal/employees" className={navClass}>Employees</NavLink>
           <NavLink to="/portal/settings" className={navClass}>Settings</NavLink>
+          <NavLink to="/portal/billing" className={navClass}>Billing</NavLink>
           <NavLink to="/portal/raw-events" className={navClass}>Raw Events</NavLink>
         </nav>
         <div className="pt-4 border-t border-slate-800 text-xs text-slate-500">

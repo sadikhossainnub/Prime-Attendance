@@ -101,7 +101,7 @@ STEP 5: Start server
   npm run dev
 
 STEP 6: Check output
-  Prime Attendance SaaS on port 7788
+  Prime Attendance on port 7788
   Super admin: admin@yourdomain.com
 
 ================================================================================
@@ -184,7 +184,7 @@ Start server:
   npm run dev
 
 Expected output:
-  Prime Attendance SaaS on port 7788
+  Prime Attendance on port 7788
   Super admin: admin@yourdomain.com
 
 Open UI:
