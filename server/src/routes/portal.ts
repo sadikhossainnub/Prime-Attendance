@@ -148,7 +148,124 @@ portalRouter.delete("/devices/:serialNumber", async (req: AuthRequest, res: Resp
     res.status(204).send();
   } catch (err) {
     console.error("Delete device error:", err);
-    res.status(404).json({ error: "Device not found" });
+    res.status(500).json({ error: "Failed to delete device" });
+  }
+});
+
+/**
+ * Get all device users across all devices
+ */
+portalRouter.get("/device-users", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const deviceSn = typeof req.query.deviceSn === "string" ? req.query.deviceSn : undefined;
+
+    const where: { tenantId: string; deviceSn?: string } = { tenantId: tid };
+    if (deviceSn) where.deviceSn = deviceSn;
+
+    const users = await prisma.deviceUser.findMany({
+      where,
+      orderBy: [{ deviceSn: "asc" }, { userPin: "asc" }],
+    });
+
+    // Group by device
+    const groupedByDevice = new Map<string, typeof users>();
+    for (const user of users) {
+      if (!groupedByDevice.has(user.deviceSn)) {
+        groupedByDevice.set(user.deviceSn, []);
+      }
+      groupedByDevice.get(user.deviceSn)?.push(user);
+    }
+
+    // Get device info for grouping
+    const devices = await prisma.device.findMany({
+      where: { tenantId: tid },
+    });
+    const deviceMap = new Map(devices.map(d => [d.serialNumber, d]));
+
+    const result = Array.from(groupedByDevice.entries()).map(([sn, userList]) => {
+      const device = deviceMap.get(sn);
+      return {
+        device: {
+          serialNumber: sn,
+          name: device?.name || sn,
+          online: device?.lastSeenAt !== null && Date.now() - (device?.lastSeenAt?.getTime() ?? 0) < 10 * 60 * 1000,
+        },
+        users: userList.map(u => ({
+          id: u.id,
+          userPin: u.userPin,
+          userName: u.userName,
+          privilege: u.privilege,
+          enabled: u.enabled,
+          lastSyncedAt: u.lastSyncedAt,
+        })),
+        count: userList.length,
+      };
+    });
+
+    res.json({
+      devices: result,
+      total: users.length,
+    });
+  } catch (err) {
+    console.error("Device users list error:", err);
+    res.status(500).json({ error: "Failed to load device users" });
+  }
+});
+
+/**
+ * Get users for a specific device
+ */
+portalRouter.get("/devices/:sn/users", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { sn } = req.params;
+
+    if (!isValidSerialNumber(sn)) {
+      res.status(400).json({ error: "Invalid device serial number" });
+      return;
+    }
+
+    // Verify device belongs to this tenant
+    const device = await prisma.device.findUnique({
+      where: { tenantId_serialNumber: { tenantId: tid, serialNumber: sn } },
+    });
+
+    if (!device) {
+      res.status(404).json({ error: "Device not found" });
+      return;
+    }
+
+    // Fetch all users registered on this device
+    const deviceUsers = await prisma.deviceUser.findMany({
+      where: {
+        tenantId: tid,
+        deviceSn: sn,
+      },
+      orderBy: { userPin: "asc" },
+    });
+
+    res.json({
+      device: {
+        id: device.id,
+        serialNumber: device.serialNumber,
+        name: device.name,
+        online: device.lastSeenAt !== null && Date.now() - device.lastSeenAt.getTime() < 10 * 60 * 1000,
+      },
+      users: deviceUsers.map(u => ({
+        id: u.id,
+        userPin: u.userPin,
+        userName: u.userName,
+        privilege: u.privilege,
+        enabled: u.enabled,
+        lastSyncedAt: u.lastSyncedAt,
+        createdAt: u.createdAt,
+      })),
+      total: deviceUsers.length,
+    });
+  } catch (err) {
+    console.error("Device users error:", err);
+    res.status(500).json({ error: "Failed to load device users" });
   }
 });
 

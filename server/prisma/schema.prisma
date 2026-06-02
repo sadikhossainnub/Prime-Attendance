@@ -73,6 +73,7 @@ model Tenant {
   payments         Payment[]
   subscriptions    Subscription[]
   invoices         Invoice[]
+  deviceUsers      DeviceUser[]
 
   @@map("tenants")
 }
@@ -159,6 +160,26 @@ model EmployeeMapping {
 
   @@unique([tenantId, userPin])
   @@map("employee_mappings")
+}
+
+model DeviceUser {
+  id            String   @id @default(cuid())
+  tenantId      String   @map("tenant_id")
+  deviceSn      String   @map("device_sn")
+  userPin       String   @map("user_pin")
+  userName      String?  @map("user_name")
+  privilege     Int?     // 0=User, 1=Manager, 2=Admin
+  enabled       Boolean  @default(true)
+  lastSyncedAt  DateTime @map("last_synced_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, deviceSn, userPin])
+  @@index([tenantId])
+  @@index([deviceSn])
+  @@map("device_users")
 }
 
 model DeviceRawEvent {

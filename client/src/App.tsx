@@ -16,6 +16,7 @@ import Employees from "./pages/Employees";
 import Settings from "./pages/Settings";
 import RawEvents from "./pages/RawEvents";
 import { Billing } from "./pages/Billing";
+import DeviceUsers from "./pages/DeviceUsers";
 import { isSuperAdmin } from "./lib/auth";
 
 function HomeRedirect() {
@@ -57,6 +58,7 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="devices" element={<Devices />} />
+          <Route path="device-users" element={<DeviceUsers />} />
           <Route path="employees" element={<Employees />} />
           <Route path="settings" element={<Settings />} />
           <Route path="billing" element={<Billing />} />

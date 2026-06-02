@@ -121,6 +121,19 @@ export const portalApi = {
     apiFetch<AttendanceResponse>(`/api/portal/attendance?${params}`),
   syncRetry: () => apiFetch<{ message: string; count: number }>("/api/portal/sync-retry", { method: "POST" }),
   rawEvents: (limit?: number) => apiFetch<DeviceRawEvent[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
+  deviceUsers: () => apiFetch<{
+    devices: Array<{
+      device: { serialNumber: string; name: string; online: boolean };
+      users: Array<{ id: string; userPin: string; userName: string | null; privilege: number | null; enabled: boolean; lastSyncedAt: string }>;
+      count: number;
+    }>;
+    total: number;
+  }>("/api/portal/device-users"),
+  deviceUsersBySerial: (serialNumber: string) => apiFetch<{
+    device: { id: string; serialNumber: string; name: string | null; online: boolean };
+    users: Array<{ id: string; userPin: string; userName: string | null; privilege: number | null; enabled: boolean; lastSyncedAt: string; createdAt: string }>;
+    total: number;
+  }>(`/api/portal/devices/${encodeURIComponent(serialNumber)}/users`),
   mappings: () => apiFetch<EmployeeMapping[]>("/api/portal/employees/mapping"),
   saveMapping: (data: {
     userPin: string;
