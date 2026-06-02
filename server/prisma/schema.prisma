@@ -95,11 +95,18 @@ model User {
   @@map("users")
 }
 
+enum PunchType {
+  BOTH
+  IN_ONLY
+  OUT_ONLY
+}
+
 model Device {
   id           String    @id @default(cuid())
   tenantId     String    @map("tenant_id")
   serialNumber String    @map("serial_number")
   name         String?
+  punchType    PunchType @default(BOTH) @map("punch_type")
   lastSeenAt   DateTime? @map("last_seen_at")
   lastIp       String?   @map("last_ip")
   firmware     String?
@@ -110,6 +117,7 @@ model Device {
 
   @@unique([tenantId, serialNumber])
   @@index([tenantId])
+  @@index([punchType])
   @@map("devices")
 }
 
