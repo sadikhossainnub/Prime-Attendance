@@ -93,6 +93,16 @@ export const adminApi = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  syncEmployees: (tenantId: string) =>
+    apiFetch<{ message: string; synced: number; skipped: number; errors: string[] }>(
+      `/api/admin/tenants/${tenantId}/sync-employees`,
+      { method: "POST" }
+    ),
+  getAccessToken: (tenantId: string, userId?: string) =>
+    apiFetch<{ token: string; user: { id: string; email: string; name: string; role: string }; tenant: { id: string; slug: string }; message: string }>(
+      `/api/admin/tenants/${tenantId}/access-token`,
+      { method: "POST", body: JSON.stringify({ userId }) }
+    ),
 };
 
 export const portalApi = {
@@ -168,8 +178,13 @@ export interface TenantRow {
 
 export interface TenantDetail extends TenantRow {
   deviceProvisionKey: string;
-  users: { id: string; email: string; name: string; role: string }[];
+  users: { id: string; email: string; name: string; role: string; isActive?: boolean }[];
   devices: Device[];
+  contactPhone?: string | null;
+  erpnextEnabled?: boolean;
+  erpnextUrl?: string | null;
+  erpnextApiKey?: string | null;
+  erpnextApiSecret?: string | null;
 }
 
 export interface CreateTenantInput {
@@ -188,6 +203,7 @@ export interface Device {
   name: string | null;
   lastSeenAt: string | null;
   lastIp: string | null;
+  firmware?: string | null;
   online?: boolean;
 }
 

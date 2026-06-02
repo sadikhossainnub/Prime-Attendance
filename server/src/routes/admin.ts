@@ -275,3 +275,113 @@ adminRouter.post("/tenants/:id/users", async (req, res: Response) => {
     role: user.role,
   });
 });
+
+/**
+ * Sync employees from ERPNext
+ */
+adminRouter.post("/tenants/:id/sync-employees", async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // Check tenant exists
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: String(id) },
+      select: { id: true, slug: true, erpnextEnabled: true },
+    });
+
+    if (!tenant) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+
+    if (!tenant.erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext not enabled for this tenant" });
+      return;
+    }
+
+    const { syncEmployeesFromErpnext } = await import("../services/erpnext.js");
+    const result = await syncEmployeesFromErpnext(id);
+
+    console.log(`[admin] Employee sync initiated: tenant=${tenant.slug}, result=${JSON.stringify(result)}`);
+
+    res.json({
+      message: "Employee sync completed",
+      synced: result.synced,
+      skipped: result.skipped,
+      errors: result.errors,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to sync employees";
+    console.error(`[admin] Employee sync error: ${message}`);
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * Get access token to login as a tenant (impersonation for admins)
+ */
+adminRouter.post("/tenants/:id/access-token", async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body as { userId?: string };
+
+    // Get tenant
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: String(id) },
+      select: { id: true, slug: true },
+    });
+
+    if (!tenant) {
+      res.status(404).json({ error: "Tenant not found" });
+      return;
+    }
+
+    // Get a tenant user (use provided userId or get first admin)
+    let user;
+    if (userId) {
+      user = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          tenantId: tenant.id,
+        },
+      });
+    } else {
+      user = await prisma.user.findFirst({
+        where: {
+          tenantId: tenant.id,
+          role: "TENANT_ADMIN",
+        },
+      });
+    }
+
+    if (!user) {
+      res.status(404).json({ error: "No tenant users found" });
+      return;
+    }
+
+    // Generate JWT token for the tenant user
+    const { signToken } = await import("../services/auth.js");
+    const token = signToken(user, tenant.slug);
+
+    console.log(`[admin] Impersonation token generated: admin=${req.user?.email}, tenant=${tenant.slug}, user=${user.email}`);
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+      },
+      message: `Access token generated for ${user.name} (${user.email})`,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to generate access token";
+    console.error(`[admin] Access token error: ${message}`);
+    res.status(500).json({ error: message });
+  }
+});

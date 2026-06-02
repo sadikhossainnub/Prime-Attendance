@@ -50,8 +50,8 @@ export default function Attendance() {
 
   const exportCsv = () => {
     if (!Array.isArray(items) || items.length === 0) return;
-    const header = "pin,time,device,in_out\n";
-    const body = items.map((r) => `${r.userPin},${r.punchedAt},${r.deviceSn},${r.inOutMode ?? ""}`).join("\n");
+    const header = "ID,Name,Time,Device,In/Out\n";
+    const body = items.map((r) => `${r.userPin},"${r.employeeName || ""}",${new Date(r.punchedAt).toLocaleString("bn-BD")},${r.deviceSn},${r.inOutMode === 1 ? "OUT" : r.inOutMode === 0 ? "IN" : ""}`).join("\n");
     const blob = new Blob([header + body], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -99,7 +99,7 @@ export default function Attendance() {
       <div className="flex flex-wrap gap-3 items-end">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
-        <input placeholder="ID" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-24" />
+        <input placeholder="Search by ID" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-32" />
         <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm disabled:opacity-50">
           {loading ? "Loading..." : "Filter"}
         </button>
@@ -123,7 +123,7 @@ export default function Attendance() {
             ) : (
               items.map((r) => (
                 <tr key={r.id} className="border-t border-slate-800">
-                  <td className="p-3 font-mono text-xs">{r.id}</td>
+                  <td className="p-3 font-mono text-xs">{r.userPin}</td>
                   <td className="p-3">{r.employeeName ?? "—"}</td>
                   <td className="p-3">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
                   <td className="p-3 font-mono text-xs">{r.deviceSn}</td>
