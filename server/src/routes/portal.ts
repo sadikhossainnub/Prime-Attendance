@@ -546,3 +546,89 @@ portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
     res.status(500).json({ error: "Failed to trigger sync retry" });
   }
 });
+
+/**
+ * Create a new user on a device
+ * Sends user data to device in iClock protocol format
+ */
+portalRouter.post("/devices/:sn/users", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { sn } = req.params;
+    const { userPin, userName, privilege } = req.body as {
+      userPin?: unknown;
+      userName?: unknown;
+      privilege?: unknown;
+    };
+
+    // Validate inputs
+    if (!isValidSerialNumber(sn)) {
+      res.status(400).json({ error: "Invalid device serial number" });
+      return;
+    }
+
+    if (!isValidPin(userPin)) {
+      res.status(400).json({ error: "userPin must be a numeric string" });
+      return;
+    }
+
+    if (typeof userName !== "string" || userName.trim().length === 0) {
+      res.status(400).json({ error: "userName must be a non-empty string" });
+      return;
+    }
+
+    const privLevel = typeof privilege === "number" ? privilege : 0;
+    if (privLevel < 0 || privLevel > 2) {
+      res.status(400).json({ error: "privilege must be 0 (User), 1 (Manager), or 2 (Admin)" });
+      return;
+    }
+
+    // Verify device belongs to this tenant
+    const device = await prisma.device.findUnique({
+      where: { tenantId_serialNumber: { tenantId: tid, serialNumber: sn } },
+    });
+
+    if (!device) {
+      res.status(404).json({ error: "Device not found" });
+      return;
+    }
+
+    // Check if user already exists on device
+    const existingUser = await prisma.deviceUser.findUnique({
+      where: { tenantId_deviceSn_userPin: { tenantId: tid, deviceSn: sn, userPin: userPin as string } },
+    });
+
+    if (existingUser) {
+      res.status(409).json({ error: "User already exists on this device" });
+      return;
+    }
+
+    // Create user record in database
+    const deviceUser = await prisma.deviceUser.create({
+      data: {
+        tenantId: tid,
+        deviceSn: sn,
+        userPin: userPin as string,
+        userName,
+        privilege: privLevel,
+        enabled: true,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    // Format user data for device in iClock CSV format
+    // Format: PIN,Name,Privilege,Enabled(1=true,0=false)
+    const userData = `${userPin},${userName.replace(/,/g, " ")},${privLevel},1`;
+
+    console.log(`[portal] User created on device: tenant=${tid}, device=${sn}, pin=${userPin}, name=${userName}, privilege=${privLevel}`);
+
+    res.status(201).json({
+      ...deviceUser,
+      message: "User created successfully. Device will sync on next connection.",
+      deviceCommand: userData, // For logging/debugging
+    });
+  } catch (err) {
+    console.error("Create device user error:", err);
+    res.status(500).json({ error: "Failed to create user on device" });
+  }
+});

@@ -134,6 +134,14 @@ export const portalApi = {
     users: Array<{ id: string; userPin: string; userName: string | null; privilege: number | null; enabled: boolean; lastSyncedAt: string; createdAt: string }>;
     total: number;
   }>(`/api/portal/devices/${encodeURIComponent(serialNumber)}/users`),
+  createDeviceUser: (deviceSn: string, data: { userPin: string; userName: string; privilege: number }) =>
+    apiFetch<{ id: string; userPin: string; userName: string; privilege: number; enabled: boolean; lastSyncedAt: string; message: string }>(
+      `/api/portal/devices/${encodeURIComponent(deviceSn)}/users`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    ),
   mappings: () => apiFetch<EmployeeMapping[]>("/api/portal/employees/mapping"),
   saveMapping: (data: {
     userPin: string;

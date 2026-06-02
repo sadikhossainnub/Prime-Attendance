@@ -30,6 +30,17 @@ export default function DeviceUsers() {
   const [expandedDevice, setExpandedDevice] = useState<string | null>(null);
   const [totalUsers, setTotalUsers] = useState(0);
 
+  // Add user modal state
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [selectedDeviceSn, setSelectedDeviceSn] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    userPin: "",
+    userName: "",
+    privilege: 0,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
   useEffect(() => {
     loadDeviceUsers();
   }, []);
@@ -45,6 +56,50 @@ export default function DeviceUsers() {
       setError(err instanceof Error ? err.message : "Failed to load device users");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddUserClick = (deviceSn: string) => {
+    setSelectedDeviceSn(deviceSn);
+    setFormData({ userPin: "", userName: "", privilege: 0 });
+    setFormError(null);
+    setShowAddUserModal(true);
+  };
+
+  const handleAddUser = async () => {
+    if (!selectedDeviceSn) return;
+
+    // Validate
+    if (!formData.userPin.trim()) {
+      setFormError("User ID (PIN) is required");
+      return;
+    }
+    if (!/^\d+$/.test(formData.userPin)) {
+      setFormError("User ID must be numeric");
+      return;
+    }
+    if (!formData.userName.trim()) {
+      setFormError("User name is required");
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setFormError(null);
+      await portalApi.createDeviceUser(selectedDeviceSn, {
+        userPin: formData.userPin,
+        userName: formData.userName,
+        privilege: formData.privilege,
+      });
+
+      // Reload device users
+      await loadDeviceUsers();
+      setShowAddUserModal(false);
+      setFormData({ userPin: "", userName: "", privilege: 0 });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -156,7 +211,15 @@ export default function DeviceUsers() {
 
                 {/* Expanded Content */}
                 {expandedDevice === group.device.serialNumber && (
-                  <div className="mt-6 border-t border-slate-700 pt-6">
+                  <div className="mt-6 border-t border-slate-700 pt-6 space-y-4">
+                    {/* Add User Button */}
+                    <button
+                      onClick={() => handleAddUserClick(group.device.serialNumber)}
+                      className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-sm font-semibold text-white transition"
+                    >
+                      + Add User
+                    </button>
+
                     {group.users.length === 0 ? (
                       <p className="text-slate-400 text-sm">No users registered on this device</p>
                     ) : (
@@ -217,6 +280,85 @@ export default function DeviceUsers() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <Card className="w-full max-w-md">
+            <div className="p-6">
+              <h2 className="text-xl font-bold text-white mb-4">Add User to Device</h2>
+
+              {formError && (
+                <div className="mb-4 p-3 bg-red-900/20 border border-red-800 rounded text-red-300 text-sm">
+                  {formError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    User ID (PIN)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.userPin}
+                    onChange={(e) => setFormData({ ...formData, userPin: e.target.value })}
+                    placeholder="e.g., 10001"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Numeric ID for the user</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    User Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.userName}
+                    onChange={(e) => setFormData({ ...formData, userName: e.target.value })}
+                    placeholder="e.g., John Doe"
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Role/Privilege
+                  </label>
+                  <select
+                    value={formData.privilege}
+                    onChange={(e) => setFormData({ ...formData, privilege: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value={0}>User (Standard)</option>
+                    <option value={1}>Manager</option>
+                    <option value={2}>Admin</option>
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1">User's privilege level on the device</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={() => setShowAddUserModal(false)}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white font-semibold transition disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddUser}
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold transition disabled:opacity-50"
+                >
+                  {submitting ? "Creating..." : "Create User"}
+                </button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>
