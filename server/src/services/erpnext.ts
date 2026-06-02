@@ -172,41 +172,101 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
     throw new Error(`Invalid ERPNext URL: ${url}`);
   }
 
-  const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee`;
+  // Test connection first
+  const testEndpoint = `${url.replace(/\/$/, "")}/api/resource/Employee?fields=["name"]&limit_page_length=1`;
 
-  console.log(`[erpnext] Fetching employees: tenant=${tenant.slug}, endpoint=${endpoint}`);
+  console.log(`[erpnext] Testing connection: tenant=${tenant.slug}, endpoint=${testEndpoint}`);
 
-  const response = await fetch(endpoint, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `token ${apiKey}:${apiSecret}`,
-    },
-  });
+  try {
+    const testResponse = await fetch(testEndpoint, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${apiKey}:${apiSecret}`,
+      },
+    });
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`ERPNext API error ${response.status}: ${text}`);
+    if (!testResponse.ok) {
+      const text = await testResponse.text();
+      throw new Error(`ERPNext API error ${testResponse.status}: ${text}`);
+    }
+
+    console.log(`[erpnext] Connection test successful: tenant=${tenant.slug}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Connection test failed";
+    console.error(`[erpnext] Connection test failed: ${message}`);
+    throw new Error(`Failed to connect to ERPNext: ${message}`);
   }
 
-  interface ErpnextEmployee {
-    name: string;
-    employee_name?: string;
+  // Fetch all employees with pagination
+  const allEmployees: Array<{ name: string; employee_name?: string }> = [];
+  let pageStart = 0;
+  const pageSize = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee?fields=["name","employee_name"]&limit_page_length=${pageSize}&limit_start=${pageStart}`;
+
+    console.log(`[erpnext] Fetching employees page: tenant=${tenant.slug}, offset=${pageStart}`);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `token ${apiKey}:${apiSecret}`,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`ERPNext API error ${response.status}: ${text}`);
+      }
+
+      interface ErpnextEmployee {
+        name: string;
+        employee_name?: string;
+      }
+
+      interface ErpnextResponse {
+        data?: ErpnextEmployee[];
+      }
+
+      const data = (await response.json()) as ErpnextResponse;
+      const employees = Array.isArray(data?.data) ? data.data : [];
+
+      console.log(`[erpnext] Fetched ${employees.length} employees in this page: tenant=${tenant.slug}`);
+
+      if (employees.length === 0) {
+        hasMore = false;
+      } else {
+        allEmployees.push(...employees);
+        pageStart += pageSize;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch employee page";
+      console.error(`[erpnext] Error fetching employees page: ${message}`);
+      throw new Error(`Failed to fetch employees from ERPNext: ${message}`);
+    }
   }
 
-  interface ErpnextResponse {
-    data: ErpnextEmployee[];
+  console.log(`[erpnext] Total employees fetched: ${allEmployees.length} for tenant=${tenant.slug}`);
+
+  if (allEmployees.length === 0) {
+    console.warn(`[erpnext] No employees found in ERPNext for tenant=${tenant.slug}`);
+    return { synced: 0, skipped: 0, errors: ["No employees found in ERPNext"] };
   }
-
-  const data = (await response.json()) as ErpnextResponse;
-  const employees = Array.isArray(data.data) ? data.data : [];
-
-  console.log(`[erpnext] Fetched ${employees.length} employees from ERPNext for tenant=${tenant.slug}`);
 
   const result = { synced: 0, skipped: 0, errors: [] as string[] };
 
-  for (const emp of employees) {
+  for (const emp of allEmployees) {
     try {
+      // Validate employee data
+      if (!emp.name) {
+        result.errors.push("Employee record missing name field");
+        continue;
+      }
+
       const empId = emp.name;
       const empName = emp.employee_name || emp.name;
 
@@ -236,10 +296,10 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
         // Try to generate a unique numeric PIN (starting from 10000)
         while (attempt < 1000) {
           const candidatePin = String(10000 + attempt);
-          const exists = await prisma.employeeMapping.findUnique({
+          const existingPin = await prisma.employeeMapping.findUnique({
             where: { tenantId_userPin: { tenantId, userPin: candidatePin } },
           });
-          if (!exists) {
+          if (!existingPin) {
             pin = candidatePin;
             break;
           }
