@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { prisma } from "../lib/prisma";
-import DevicePunchTypeService from "../services/devicePunchTypeService";
+import { prisma } from "../lib/prisma.js";
+import DevicePunchTypeService from "../services/devicePunchTypeService.js";
 
 /**
  * Middleware to validate punch against device's punch_type configuration

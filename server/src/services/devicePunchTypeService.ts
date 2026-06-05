@@ -1,4 +1,5 @@
-import { PunchType } from "@prisma/client";
+// Local type definition until Prisma client refreshes
+type PunchType = "BOTH" | "IN_ONLY" | "OUT_ONLY";
 
 /**
  * Validates punch against device's punch_type configuration

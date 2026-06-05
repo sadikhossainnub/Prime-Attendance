@@ -1,7 +1,9 @@
 import express, { Request, Response } from "express";
-import { prisma } from "../lib/prisma";
-import { PunchType } from "@prisma/client";
-import DevicePunchTypeService from "../services/devicePunchTypeService";
+import { prisma } from "../lib/prisma.js";
+import DevicePunchTypeService from "../services/devicePunchTypeService.js";
+
+// Local type definition until Prisma client refreshes
+type PunchType = "BOTH" | "IN_ONLY" | "OUT_ONLY";
 
 const router = express.Router();
 
@@ -11,7 +13,7 @@ const router = express.Router();
  */
 router.get("/", async (req: Request, res: Response) => {
   try {
-    const { tenantId } = req.user as any;
+    const { tenantId } = (req as any).user;
     const { punchType, status } = req.query;
 
     const where: any = { tenantId };
@@ -35,7 +37,7 @@ router.get("/", async (req: Request, res: Response) => {
     });
 
     // Add computed fields
-    const devicesWithStatus = devices.map((device) => ({
+    const devicesWithStatus = devices.map((device: any) => ({
       ...device,
       punchTypeLabel: DevicePunchTypeService.getPunchTypeLabel(device.punchType),
       isOnline:
@@ -59,7 +61,7 @@ router.get("/", async (req: Request, res: Response) => {
  */
 router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const { tenantId } = req.user as any;
+    const { tenantId } = (req as any).user;
     const { id } = req.params;
 
     const device = await prisma.device.findFirst({
@@ -91,7 +93,7 @@ router.get("/:id", async (req: Request, res: Response) => {
  */
 router.put("/:id", async (req: Request, res: Response) => {
   try {
-    const { tenantId } = req.user as any;
+    const { tenantId } = (req as any).user;
     const { id } = req.params;
     const { name, punchType } = req.body;
 
@@ -141,7 +143,7 @@ router.put("/:id", async (req: Request, res: Response) => {
  */
 router.get("/by-punch-type/:type", async (req: Request, res: Response) => {
   try {
-    const { tenantId } = req.user as any;
+    const { tenantId } = (req as any).user;
     const { type } = req.params;
 
     if (!["BOTH", "IN_ONLY", "OUT_ONLY"].includes(type)) {
@@ -183,7 +185,7 @@ router.post(
   "/bulk-update-punch-type",
   async (req: Request, res: Response) => {
     try {
-      const { tenantId } = req.user as any;
+      const { tenantId } = (req as any).user;
       const { deviceIds, punchType } = req.body;
 
       if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
