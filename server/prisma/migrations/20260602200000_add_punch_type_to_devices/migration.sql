@@ -1,8 +1,8 @@
--- Add punch_type column to devices table
-ALTER TABLE devices ADD COLUMN punch_type VARCHAR(10) DEFAULT 'BOTH';
+-- CreateEnum
+CREATE TYPE "PunchType" AS ENUM ('BOTH', 'IN_ONLY', 'OUT_ONLY');
 
--- Add comment for clarity
-COMMENT ON COLUMN devices.punch_type IS 'BOTH: accepts all punches, IN_ONLY: accepts only in punches, OUT_ONLY: accepts only out punches';
+-- AlterTable
+ALTER TABLE "devices" ADD COLUMN "punch_type" "PunchType" NOT NULL DEFAULT 'BOTH';
 
--- Create index for filtering
-CREATE INDEX idx_devices_punch_type ON devices(punch_type);
+-- CreateIndex
+CREATE INDEX "devices_punch_type_idx" ON "devices"("punch_type");
