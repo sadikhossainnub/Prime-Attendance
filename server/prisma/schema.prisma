@@ -293,3 +293,84 @@ model Invoice {
   @@index([dueDate])
   @@map("invoices")
 }
+
+enum PackageStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceUnit {
+  COUNT
+  PERCENT
+  UNLIMITED
+}
+
+model SubscriptionPackage {
+  id              String       @id @default(cuid())
+  name            String
+  code            String       @unique
+  description     String?
+  isActive        PackageStatus @default(ACTIVE)
+  price           Float        @default(0)
+  currency        String       @default("BDT")
+  billingCycle    BillingCycle @default(MONTHLY)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  services        PackageService[]
+  tenant          Tenant?      @map("tenant_id")
+
+  @@map("subscription_packages")
+}
+
+model Service {
+  id              String       @id @default(cuid())
+  name            String
+  code            String       @unique
+  description     String?
+  unit            ServiceUnit  @default(COUNT)
+  defaultLimit    Int          @default(0) @map("default_limit")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  packages        PackageService[]
+
+  @@map("services")
+}
+
+model PackageService {
+  id              String       @id @default(cuid())
+  packageId       String       @map("package_id")
+  serviceId       String       @map("service_id")
+  limit           Int          @default(0)
+  isUnlimited     Boolean      @default(false) @map("is_unlimited")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  package         SubscriptionPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service         Service         @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, serviceId])
+  @@index([packageId])
+  @@index([serviceId])
+  @@map("package_services")
+}
+
+model TenantServiceUsage {
+  id              String       @id @default(cuid())
+  tenantId        String       @map("tenant_id")
+  serviceId       String       @map("service_id")
+  currentUsage    Int          @default(0) @map("current_usage")
+  limit           Int          @default(0)
+  isUnlimited     Boolean      @default(false) @map("is_unlimited")
+  resetDate       DateTime?    @map("reset_date")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service         Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, serviceId])
+  @@index([tenantId])
+  @@index([serviceId])
+  @@map("tenant_service_usage")
+}

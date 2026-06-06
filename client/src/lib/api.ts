@@ -156,6 +156,18 @@ export const portalApi = {
     apiFetch<void>(`/api/portal/employees/mapping/${encodeURIComponent(pin)}`, {
       method: "DELETE",
     }),
+  // Fetch employees from ERPNext
+  fetchErpnextEmployees: () =>
+    apiFetch<{
+      success: boolean;
+      count: number;
+      employees: ErpnextEmployee[];
+    }>("/api/portal/employees/erpnext"),
+  fetchErpnextEmployee: (employeeId: string) =>
+    apiFetch<{
+      success: boolean;
+      employee: ErpnextEmployee;
+    }>(`/api/portal/employees/erpnext/${encodeURIComponent(employeeId)}`),
   settings: () => apiFetch<TenantSettings>("/api/portal/settings"),
   updateErpnextConfig: (config: {
     enabled: boolean;
@@ -251,6 +263,28 @@ export interface EmployeeMapping {
   userPin: string;
   employeeName: string;
   erpnextEmployeeId: string | null;
+}
+
+export interface ErpnextEmployee {
+  name: string; // Employee ID (EMP-001)
+  employee_name: string; // Full Name
+  first_name?: string;
+  middle_name?: string;
+  last_name?: string;
+  gender?: string;
+  date_of_birth?: string;
+  date_of_joining?: string;
+  status?: string;
+  company?: string;
+  department?: string;
+  designation?: string;
+  employment_type?: string;
+  cell_number?: string;
+  personal_email?: string;
+  company_email?: string;
+  current_address?: string;
+  permanent_address?: string;
+  attendance_device_id?: string; // Biometric/RF tag ID
 }
 
 export interface DeviceRawEvent {

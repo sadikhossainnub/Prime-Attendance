@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Subscription Management",
+  "description": "Creating subscription management system for admin panel",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": ""
+  }
+}

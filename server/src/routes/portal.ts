@@ -5,7 +5,13 @@ import {
   requireTenantUser,
   type AuthRequest,
 } from "../middleware/auth.js";
-import { isErpnextEnabledForTenant, queueAttendanceSync } from "../services/erpnext.js";
+import { 
+  isErpnextEnabledForTenant, 
+  queueAttendanceSync, 
+  fetchEmployeesFromErpnext,
+  fetchEmployeeFromErpnext,
+  type ErpnextEmployeeDetails
+} from "../services/erpnext.js";
 
 export const portalRouter = Router();
 portalRouter.use(requireAuth, requireTenantUser);
@@ -412,6 +418,76 @@ portalRouter.delete(
     }
   }
 );
+
+/**
+ * Fetch all employees from ERPNext with detailed information
+ * GET /api/portal/employees/erpnext
+ */
+portalRouter.get("/employees/erpnext", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    
+    // Check if ERPNext is enabled
+    const erpnextEnabled = await isErpnextEnabledForTenant(tid);
+    if (!erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext integration is not enabled for this tenant" });
+      return;
+    }
+
+    // Fetch employees from ERPNext
+    const employees = await fetchEmployeesFromErpnext(tid);
+    
+    res.json({ 
+      success: true, 
+      count: employees.length,
+      employees 
+    });
+  } catch (err) {
+    console.error("Fetch ERPNext employees error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch employees from ERPNext";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * Fetch single employee from ERPNext by ID
+ * GET /api/portal/employees/erpnext/:employeeId
+ */
+portalRouter.get("/employees/erpnext/:employeeId", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const employeeId = String(req.params.employeeId);
+
+    if (!employeeId || employeeId.trim().length === 0) {
+      res.status(400).json({ error: "Employee ID is required" });
+      return;
+    }
+
+    // Check if ERPNext is enabled
+    const erpnextEnabled = await isErpnextEnabledForTenant(tid);
+    if (!erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext integration is not enabled for this tenant" });
+      return;
+    }
+
+    // Fetch employee from ERPNext
+    const employee = await fetchEmployeeFromErpnext(tid, employeeId);
+    
+    if (!employee) {
+      res.status(404).json({ error: "Employee not found in ERPNext" });
+      return;
+    }
+
+    res.json({ 
+      success: true, 
+      employee 
+    });
+  } catch (err) {
+    console.error("Fetch ERPNext employee error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch employee from ERPNext";
+    res.status(500).json({ error: message });
+  }
+});
 
 portalRouter.get("/settings", async (req: AuthRequest, res: Response) => {
   try {

@@ -334,3 +334,210 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
   return result;
 }
 
+/**
+ * ERPNext Employee interface with all fields
+ */
+export interface ErpnextEmployeeDetails {
+  name: string; // Employee ID (EMP-001)
+  employee_name: string; // Full Name
+  first_name?: string;
+  middle_name?: string;
+  last_name?: string;
+  gender?: string;
+  date_of_birth?: string;
+  date_of_joining?: string;
+  status?: string;
+  company?: string;
+  department?: string;
+  designation?: string;
+  employment_type?: string;
+  cell_number?: string;
+  personal_email?: string;
+  company_email?: string;
+  current_address?: string;
+  permanent_address?: string;
+  attendance_device_id?: string; // Biometric/RF tag ID
+}
+
+/**
+ * Fetch all employees from ERPNext with detailed information
+ */
+export async function fetchEmployeesFromErpnext(tenantId: string): Promise<ErpnextEmployeeDetails[]> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      slug: true,
+      erpnextEnabled: true,
+      erpnextUrl: true,
+      erpnextApiKey: true,
+      erpnextApiSecret: true,
+    },
+  });
+
+  if (!tenant?.erpnextEnabled) {
+    throw new Error("ERPNext not enabled for this tenant");
+  }
+
+  const { erpnextUrl: url, erpnextApiKey: apiKey, erpnextApiSecret: apiSecret } = tenant;
+
+  if (!url || !apiKey || !apiSecret) {
+    throw new Error("ERPNext credentials not configured");
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(`Invalid ERPNext URL: ${url}`);
+  }
+
+  // Fields to fetch from ERPNext Employee DocType
+  const fields = [
+    "name",
+    "employee_name",
+    "first_name",
+    "middle_name",
+    "last_name",
+    "gender",
+    "date_of_birth",
+    "date_of_joining",
+    "status",
+    "company",
+    "department",
+    "designation",
+    "employment_type",
+    "cell_number",
+    "personal_email",
+    "company_email",
+    "current_address",
+    "permanent_address",
+    "attendance_device_id"
+  ];
+
+  const allEmployees: ErpnextEmployeeDetails[] = [];
+  let pageStart = 0;
+  const pageSize = 100;
+  let hasMore = true;
+
+  while (hasMore) {
+    const fieldsParam = JSON.stringify(fields);
+    const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee?fields=${encodeURIComponent(fieldsParam)}&limit_page_length=${pageSize}&limit_start=${pageStart}`;
+
+    console.log(`[erpnext] Fetching detailed employees page: tenant=${tenant.slug}, offset=${pageStart}`);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `token ${apiKey}:${apiSecret}`,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`ERPNext API error ${response.status}: ${text}`);
+      }
+
+      interface ErpnextResponse {
+        data?: ErpnextEmployeeDetails[];
+      }
+
+      const data = (await response.json()) as ErpnextResponse;
+      const employees = Array.isArray(data?.data) ? data.data : [];
+
+      console.log(`[erpnext] Fetched ${employees.length} detailed employees in this page: tenant=${tenant.slug}`);
+
+      if (employees.length === 0) {
+        hasMore = false;
+      } else {
+        allEmployees.push(...employees);
+        pageStart += pageSize;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to fetch employee page";
+      console.error(`[erpnext] Error fetching employees page: ${message}`);
+      throw new Error(`Failed to fetch employees from ERPNext: ${message}`);
+    }
+  }
+
+  console.log(`[erpnext] Total detailed employees fetched: ${allEmployees.length} for tenant=${tenant.slug}`);
+
+  return allEmployees;
+}
+
+/**
+ * Fetch single employee details from ERPNext by employee ID
+ */
+export async function fetchEmployeeFromErpnext(tenantId: string, employeeId: string): Promise<ErpnextEmployeeDetails | null> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      slug: true,
+      erpnextEnabled: true,
+      erpnextUrl: true,
+      erpnextApiKey: true,
+      erpnextApiSecret: true,
+    },
+  });
+
+  if (!tenant?.erpnextEnabled) {
+    throw new Error("ERPNext not enabled for this tenant");
+  }
+
+  const { erpnextUrl: url, erpnextApiKey: apiKey, erpnextApiSecret: apiSecret } = tenant;
+
+  if (!url || !apiKey || !apiSecret) {
+    throw new Error("ERPNext credentials not configured");
+  }
+
+  try {
+    new URL(url);
+  } catch {
+    throw new Error(`Invalid ERPNext URL: ${url}`);
+  }
+
+  const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee/${employeeId}`;
+
+  console.log(`[erpnext] Fetching employee: tenant=${tenant.slug}, employeeId=${employeeId}`);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `token ${apiKey}:${apiSecret}`,
+      },
+    });
+
+    if (response.status === 404) {
+      console.log(`[erpnext] Employee not found: tenant=${tenant.slug}, employeeId=${employeeId}`);
+      return null;
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`ERPNext API error ${response.status}: ${text}`);
+    }
+
+    interface ErpnextResponse {
+      data?: ErpnextEmployeeDetails;
+    }
+
+    const data = (await response.json()) as ErpnextResponse;
+
+    if (!data.data) {
+      return null;
+    }
+
+    console.log(`[erpnext] Employee fetched: tenant=${tenant.slug}, employeeId=${employeeId}`);
+
+    return data.data;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to fetch employee";
+    console.error(`[erpnext] Error fetching employee: ${message}`);
+    throw new Error(`Failed to fetch employee from ERPNext: ${message}`);
+  }
+}
+
