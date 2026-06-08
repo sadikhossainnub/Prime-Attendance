@@ -708,3 +708,163 @@ portalRouter.post("/devices/:sn/users", async (req: AuthRequest, res: Response) 
     res.status(500).json({ error: "Failed to create user on device" });
   }
 });
+
+/**
+ * Get device-employee PIN mappings
+ * GET /api/portal/device-mappings
+ */
+portalRouter.get("/device-mappings", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const deviceSn = typeof req.query.deviceSn === "string" ? req.query.deviceSn : undefined;
+    const userPin = typeof req.query.userPin === "string" ? req.query.userPin : undefined;
+
+    const where: { tenantId: string; deviceSn?: string; userPin?: string } = { tenantId: tid };
+    if (deviceSn) where.deviceSn = deviceSn;
+    if (userPin) where.userPin = userPin;
+
+    const mappings = await prisma.deviceUser.findMany({
+      where,
+      orderBy: [{ deviceSn: "asc" }, { userPin: "asc" }],
+    });
+
+    // Fetch associated employee mappings for enrichment
+    const uniquePins = [...new Set(mappings.map(m => m.userPin))];
+    const employeeMappings = await prisma.employeeMapping.findMany({
+      where: {
+        tenantId: tid,
+        userPin: { in: uniquePins },
+      },
+      select: { userPin: true, employeeName: true, erpnextEmployeeId: true },
+    });
+
+    const employeeMap = new Map(
+      employeeMappings.map(em => [em.userPin, em])
+    );
+
+    const enriched = mappings.map(m => ({
+      ...m,
+      employee: employeeMap.get(m.userPin) || null,
+    }));
+
+    res.json(enriched);
+  } catch (err) {
+    console.error("Device mappings error:", err);
+    res.status(500).json({ error: "Failed to load device mappings" });
+  }
+});
+
+/**
+ * Create or update device-employee PIN mapping
+ * POST /api/portal/device-mappings
+ */
+portalRouter.post("/device-mappings", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { deviceSn, userPin, privilege, createEmployeeMapping, employeeName } = req.body as {
+      deviceSn?: unknown;
+      userPin?: unknown;
+      privilege?: unknown;
+      createEmployeeMapping?: boolean;
+      employeeName?: unknown;
+    };
+
+    if (!isValidSerialNumber(deviceSn)) {
+      res.status(400).json({ error: "Invalid device serial number" });
+      return;
+    }
+
+    if (!isValidPin(userPin)) {
+      res.status(400).json({ error: "userPin must be a numeric string" });
+      return;
+    }
+
+    const privLevel = typeof privilege === "number" ? privilege : 0;
+    if (privLevel < 0 || privLevel > 2) {
+      res.status(400).json({ error: "privilege must be 0, 1, or 2" });
+      return;
+    }
+
+    // Verify device exists and belongs to tenant
+    const device = await prisma.device.findUnique({
+      where: { tenantId_serialNumber: { tenantId: tid, serialNumber: deviceSn as string } },
+    });
+
+    if (!device) {
+      res.status(404).json({ error: "Device not found" });
+      return;
+    }
+
+    // Create or update the device user mapping
+    const mapping = await prisma.deviceUser.upsert({
+      where: { tenantId_deviceSn_userPin: { tenantId: tid, deviceSn: deviceSn as string, userPin: userPin as string } },
+      create: {
+        tenantId: tid,
+        deviceSn: deviceSn as string,
+        userPin: userPin as string,
+        userName: typeof employeeName === "string" ? employeeName : null,
+        privilege: privLevel,
+        enabled: true,
+        lastSyncedAt: new Date(),
+      },
+      update: {
+        privilege: privLevel,
+        enabled: true,
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    // Optionally create employee mapping
+    if (createEmployeeMapping && typeof employeeName === "string" && employeeName.trim()) {
+      await prisma.employeeMapping.upsert({
+        where: { tenantId_userPin: { tenantId: tid, userPin: userPin as string } },
+        create: {
+          tenantId: tid,
+          userPin: userPin as string,
+          employeeName: employeeName.trim(),
+        },
+        update: {
+          employeeName: employeeName.trim(),
+        },
+      });
+    }
+
+    console.log(`[portal] Device mapping created: tenant=${tid}, device=${deviceSn}, pin=${userPin}`);
+
+    res.status(201).json(mapping);
+  } catch (err) {
+    console.error("Create device mapping error:", err);
+    res.status(500).json({ error: "Failed to create device mapping" });
+  }
+});
+
+/**
+ * Delete device-employee PIN mapping
+ * DELETE /api/portal/device-mappings/:deviceSn/:userPin
+ */
+portalRouter.delete("/device-mappings/:deviceSn/:userPin", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const deviceSn = decodeURIComponent(String(req.params.deviceSn));
+    const userPin = String(req.params.userPin);
+
+    if (!isValidSerialNumber(deviceSn)) {
+      res.status(400).json({ error: "Invalid device serial number" });
+      return;
+    }
+
+    if (!isValidPin(userPin)) {
+      res.status(400).json({ error: "Invalid PIN format" });
+      return;
+    }
+
+    await prisma.deviceUser.delete({
+      where: { tenantId_deviceSn_userPin: { tenantId: tid, deviceSn, userPin } },
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    console.error("Delete device mapping error:", err);
+    res.status(404).json({ error: "Mapping not found" });
+  }
+});

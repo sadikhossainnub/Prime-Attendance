@@ -22,6 +22,7 @@ export default function PortalLayout() {
           <NavLink to="/portal/attendance" className={navClass}>Attendance</NavLink>
           <NavLink to="/portal/devices" className={navClass}>Devices</NavLink>
           <NavLink to="/portal/device-users" className={navClass}>Device Users</NavLink>
+          <NavLink to="/portal/device-pin-mapping" className={navClass}>Device PIN Mapping</NavLink>
           <NavLink to="/portal/employees" className={navClass}>Employees</NavLink>
           <NavLink to="/portal/settings" className={navClass}>Settings</NavLink>
           <NavLink to="/portal/billing" className={navClass}>Billing</NavLink>

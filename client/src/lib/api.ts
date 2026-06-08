@@ -179,6 +179,28 @@ export const portalApi = {
       method: "PATCH",
       body: JSON.stringify(config),
     }),
+  // Device PIN Mapping
+  deviceMappings: (params?: { deviceSn?: string; userPin?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.deviceSn) query.set("deviceSn", params.deviceSn);
+    if (params?.userPin) query.set("userPin", params.userPin);
+    return apiFetch<DevicePinMapping[]>(`/api/portal/device-mappings${query.toString() ? "?" + query.toString() : ""}`);
+  },
+  createDeviceMapping: (data: {
+    deviceSn: string;
+    userPin: string;
+    privilege?: number;
+    createEmployeeMapping?: boolean;
+    employeeName?: string;
+  }) =>
+    apiFetch<DevicePinMapping>("/api/portal/device-mappings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  deleteDeviceMapping: (deviceSn: string, userPin: string) =>
+    apiFetch<void>(`/api/portal/device-mappings/${encodeURIComponent(deviceSn)}/${encodeURIComponent(userPin)}`, {
+      method: "DELETE",
+    }),
   // bKash Payment
   initiateBkashPayment: (amount: number, invoiceId: string) =>
     apiFetch<{ paymentURL: string; paymentID: string }>("/api/portal/payment/bkash/initiate", {
@@ -263,6 +285,17 @@ export interface EmployeeMapping {
   userPin: string;
   employeeName: string;
   erpnextEmployeeId: string | null;
+}
+
+export interface DevicePinMapping {
+  id: string;
+  deviceSn: string;
+  userPin: string;
+  userName: string | null;
+  privilege: number | null;
+  enabled: boolean;
+  lastSyncedAt: string;
+  employee?: EmployeeMapping | null;
 }
 
 export interface ErpnextEmployee {

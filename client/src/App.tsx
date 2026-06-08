@@ -17,6 +17,7 @@ import Settings from "./pages/Settings";
 import RawEvents from "./pages/RawEvents";
 import { Billing } from "./pages/Billing";
 import DeviceUsers from "./pages/DeviceUsers";
+import DevicePinMapping from "./pages/DevicePinMapping";
 import { isSuperAdmin } from "./lib/auth";
 
 function HomeRedirect() {
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="attendance" element={<Attendance />} />
           <Route path="devices" element={<Devices />} />
           <Route path="device-users" element={<DeviceUsers />} />
+          <Route path="device-pin-mapping" element={<DevicePinMapping />} />
           <Route path="employees" element={<Employees />} />
           <Route path="settings" element={<Settings />} />
           <Route path="billing" element={<Billing />} />
