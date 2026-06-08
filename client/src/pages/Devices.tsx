@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { portalApi, type Device } from "../lib/api";
+import { DevicePunchTypeSelector, DevicePunchTypeBadge } from "../components/DevicePunchTypeSelector";
 
 export default function Devices() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -7,6 +8,9 @@ export default function Devices() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingPunchType, setEditingPunchType] = useState<"BOTH" | "IN_ONLY" | "OUT_ONLY">("BOTH");
+  const [savingPunchType, setSavingPunchType] = useState(false);
 
   const load = async () => {
     try {
@@ -52,11 +56,36 @@ export default function Devices() {
     }
   };
 
+  const onEditPunchType = (deviceId: string, currentPunchType: "BOTH" | "IN_ONLY" | "OUT_ONLY" | undefined) => {
+    setEditingDeviceId(deviceId);
+    setEditingPunchType(currentPunchType || "BOTH");
+  };
+
+  const onSavePunchType = async (deviceId: string) => {
+    setSavingPunchType(true);
+    try {
+      setError(null);
+      await portalApi.updateDevicePunchType(deviceId, editingPunchType);
+      await load();
+      setEditingDeviceId(null);
+    } catch (err) {
+      console.error("Failed to update punch type:", err);
+      setError(err instanceof Error ? err.message : "Failed to update punch type");
+    } finally {
+      setSavingPunchType(false);
+    }
+  };
+
+  const onCancelEdit = () => {
+    setEditingDeviceId(null);
+    setEditingPunchType("BOTH");
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold text-white">Devices</h2>
-        <p className="text-slate-400 text-sm">ডিভাইস আগে থেকে রেজিস্টার করুন (Serial Number)</p>
+        <p className="text-slate-400 text-sm">ডিভাইস রেজিস্টার করুন এবং Punch Type সেট করুন</p>
       </div>
 
       {error && (
@@ -66,49 +95,108 @@ export default function Devices() {
       )}
 
       <form onSubmit={onAdd} className="flex flex-wrap gap-2 p-4 rounded-xl border border-slate-800 bg-slate-900/40">
-        <input required placeholder="Serial Number (SN)" value={serial} onChange={(e) => setSerial(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm font-mono" />
-        <input placeholder="Label (optional)" value={name} onChange={(e) => setName(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm" />
-        <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm disabled:opacity-50">
+        <input required placeholder="Serial Number (SN)" value={serial} onChange={(e) => setSerial(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm font-mono text-white placeholder-slate-600" />
+        <input placeholder="Label (optional)" value={name} onChange={(e) => setName(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-600" />
+        <button type="submit" disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm text-white hover:bg-indigo-700 disabled:opacity-50">
           {loading ? "Adding..." : "Add device"}
         </button>
       </form>
 
-      <div className="rounded-xl border border-slate-800 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-900 text-slate-400">
-            <tr>
-              <th className="text-left p-3">Serial</th>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">IP</th>
-              <th className="text-left p-3">Last seen</th>
-              <th className="text-left p-3">Status</th>
-              <th className="text-left p-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {devices.map((d) => (
-              <tr key={d.id} className="border-t border-slate-800">
-                <td className="p-3 font-mono">{d.serialNumber}</td>
-                <td className="p-3">{d.name ?? "—"}</td>
-                <td className="p-3">{d.lastIp ?? "—"}</td>
-                <td className="p-3">{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString("bn-BD") : "—"}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-0.5 rounded text-xs ${d.online ? "bg-emerald-900/50 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
-                    {d.online ? "Online" : "Offline"}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <button
-                    onClick={() => onDelete(d.serialNumber)}
-                    className="text-red-400 hover:text-red-300 text-xs"
-                  >
-                    Delete
-                  </button>
-                </td>
+      <div className="rounded-xl border border-slate-800 overflow-hidden bg-slate-900/20">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900 text-slate-300">
+              <tr>
+                <th className="text-left p-4">Serial</th>
+                <th className="text-left p-4">Name</th>
+                <th className="text-left p-4">Punch Type</th>
+                <th className="text-left p-4">IP</th>
+                <th className="text-left p-4">Last seen</th>
+                <th className="text-left p-4">Status</th>
+                <th className="text-left p-4">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {devices.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                    কোন ডিভাইস নেই। প্রথম ডিভাইস যোগ করুন।
+                  </td>
+                </tr>
+              ) : (
+                devices.map((d) => (
+                  <tr key={d.id} className="border-t border-slate-800 hover:bg-slate-800/20">
+                    <td className="p-4 font-mono text-xs text-slate-300">{d.serialNumber}</td>
+                    <td className="p-4 text-sm text-slate-300">{d.name ?? "—"}</td>
+                    <td className="p-4">
+                      {editingDeviceId === d.id ? (
+                        <div className="flex gap-2 items-center">
+                          <select
+                            value={editingPunchType}
+                            onChange={(e) => setEditingPunchType(e.target.value as "BOTH" | "IN_ONLY" | "OUT_ONLY")}
+                            className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-xs text-white"
+                          >
+                            <option value="BOTH">↔️ Both IN & OUT</option>
+                            <option value="IN_ONLY">🔓 IN Only</option>
+                            <option value="OUT_ONLY">🚪 OUT Only</option>
+                          </select>
+                          <button
+                            onClick={() => onSavePunchType(d.id)}
+                            disabled={savingPunchType}
+                            className="px-3 py-1 text-xs rounded bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-medium"
+                          >
+                            {savingPunchType ? "..." : "Save"}
+                          </button>
+                          <button
+                            onClick={onCancelEdit}
+                            className="px-3 py-1 text-xs rounded bg-slate-700 hover:bg-slate-600 text-slate-300"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2 items-center">
+                          <DevicePunchTypeBadge type={d.punchType} />
+                          <button
+                            onClick={() => onEditPunchType(d.id, d.punchType)}
+                            className="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 ml-auto"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-4 text-sm text-slate-400">{d.lastIp ?? "—"}</td>
+                    <td className="p-4 text-sm text-slate-400">{d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString("bn-BD") : "—"}</td>
+                    <td className="p-4">
+                      <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${d.online ? "bg-emerald-900/50 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                        {d.online ? "🟢 Online" : "🔴 Offline"}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <button
+                        onClick={() => onDelete(d.serialNumber)}
+                        className="text-red-400 hover:text-red-300 text-xs font-medium"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Info Box */}
+      <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700 text-slate-300 text-sm space-y-2">
+        <p className="font-medium">📋 Punch Type Configuration:</p>
+        <ul className="space-y-1 ml-4">
+          <li>↔️ <strong>Both IN & OUT:</strong> ডিভাইস সব ধরনের punch গ্রহণ করবে</li>
+          <li>🔓 <strong>IN Only:</strong> শুধুমাত্র office entry punches গ্রহণ করবে</li>
+          <li>🚪 <strong>OUT Only:</strong> শুধুমাত্র office exit punches গ্রহণ করবে</li>
+        </ul>
       </div>
     </div>
   );

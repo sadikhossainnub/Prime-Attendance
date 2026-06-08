@@ -117,6 +117,11 @@ export const portalApi = {
     apiFetch<void>(`/api/portal/devices/${encodeURIComponent(sn)}`, {
       method: "DELETE",
     }),
+  updateDevicePunchType: (deviceId: string, punchType: "BOTH" | "IN_ONLY" | "OUT_ONLY") =>
+    apiFetch<Device>(`/api/portal/devices/${deviceId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ punchType }),
+    }),
   attendance: (params: URLSearchParams) =>
     apiFetch<AttendanceResponse>(`/api/portal/attendance?${params}`),
   syncRetry: () => apiFetch<{ message: string; count: number }>("/api/portal/sync-retry", { method: "POST" }),
@@ -256,6 +261,7 @@ export interface Device {
   id: string;
   serialNumber: string;
   name: string | null;
+  punchType?: "BOTH" | "IN_ONLY" | "OUT_ONLY";
   lastSeenAt: string | null;
   lastIp: string | null;
   firmware?: string | null;

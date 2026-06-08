@@ -4,24 +4,44 @@ interface DevicePunchTypeSelectorProps {
   value: "BOTH" | "IN_ONLY" | "OUT_ONLY";
   onChange: (type: "BOTH" | "IN_ONLY" | "OUT_ONLY") => void;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 export const DevicePunchTypeSelector: React.FC<
   DevicePunchTypeSelectorProps
-> = ({ value, onChange, disabled = false }) => {
+> = ({ value, onChange, disabled = false, compact = false }) => {
   const options = [
-    { value: "BOTH", label: "Both IN & OUT", description: "Accepts all punches" },
+    { value: "BOTH", label: "Both IN & OUT", description: "Accepts all punches", emoji: "↔️" },
     {
       value: "IN_ONLY",
       label: "IN Only",
       description: "Accepts only entrance punches",
+      emoji: "🔓",
     },
     {
       value: "OUT_ONLY",
       label: "OUT Only",
       description: "Accepts only exit punches",
+      emoji: "🚪",
     },
   ];
+
+  if (compact) {
+    return (
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as "BOTH" | "IN_ONLY" | "OUT_ONLY")}
+        disabled={disabled}
+        className="bg-slate-950 border border-slate-600 rounded px-2 py-1 text-xs text-white disabled:opacity-50 cursor-pointer"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.emoji} {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -48,7 +68,7 @@ export const DevicePunchTypeSelector: React.FC<
               className="ml-3 flex flex-col cursor-pointer"
             >
               <span className="text-sm font-medium text-gray-900">
-                {option.label}
+                {option.emoji} {option.label}
               </span>
               <span className="text-xs text-gray-500">{option.description}</span>
             </label>
@@ -60,35 +80,40 @@ export const DevicePunchTypeSelector: React.FC<
 };
 
 interface DevicePunchTypeBadgeProps {
-  type: "BOTH" | "IN_ONLY" | "OUT_ONLY";
+  type: "BOTH" | "IN_ONLY" | "OUT_ONLY" | undefined;
 }
 
 export const DevicePunchTypeBadge: React.FC<DevicePunchTypeBadgeProps> = ({
   type,
 }) => {
-  const badgeStyles: Record<string, { bg: string; text: string; label: string }> = {
+  if (!type) return <span className="text-slate-400 text-xs">Not set</span>;
+
+  const badgeStyles: Record<string, { bg: string; text: string; label: string; icon: string }> = {
     BOTH: {
-      bg: "bg-blue-100",
-      text: "text-blue-800",
+      bg: "bg-blue-900/50",
+      text: "text-blue-300",
       label: "Both IN/OUT",
+      icon: "↔️",
     },
     IN_ONLY: {
-      bg: "bg-green-100",
-      text: "text-green-800",
-      label: "🔓 IN Only",
+      bg: "bg-green-900/50",
+      text: "text-green-300",
+      label: "IN Only",
+      icon: "🔓",
     },
     OUT_ONLY: {
-      bg: "bg-red-100",
-      text: "text-red-800",
-      label: "🚪 OUT Only",
+      bg: "bg-red-900/50",
+      text: "text-red-300",
+      label: "OUT Only",
+      icon: "🚪",
     },
   };
 
   const style = badgeStyles[type];
 
   return (
-    <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${style.bg} ${style.text}`}>
-      {style.label}
+    <span className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium ${style.bg} ${style.text}`}>
+      {style.icon} {style.label}
     </span>
   );
 };

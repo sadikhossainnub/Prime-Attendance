@@ -158,6 +158,48 @@ portalRouter.delete("/devices/:serialNumber", async (req: AuthRequest, res: Resp
   }
 });
 
+portalRouter.patch("/devices/:deviceId", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { deviceId } = req.params;
+    const { punchType, name } = req.body as {
+      punchType?: unknown;
+      name?: unknown;
+    };
+
+    // Validate punchType if provided
+    if (punchType && !["BOTH", "IN_ONLY", "OUT_ONLY"].includes(String(punchType))) {
+      res.status(400).json({ error: "Invalid punchType. Must be BOTH, IN_ONLY, or OUT_ONLY" });
+      return;
+    }
+
+    // Verify device belongs to this tenant
+    const device = await prisma.device.findFirst({
+      where: { id: deviceId, tenantId: tid },
+    });
+
+    if (!device) {
+      res.status(404).json({ error: "Device not found" });
+      return;
+    }
+
+    // Update device
+    const updated = await prisma.device.update({
+      where: { id: deviceId },
+      data: {
+        ...(punchType && { punchType: punchType as "BOTH" | "IN_ONLY" | "OUT_ONLY" }),
+        ...(typeof name === "string" && { name }),
+      },
+    });
+
+    console.log(`[portal] Device updated: tenant=${tid}, device=${deviceId}, punchType=${punchType}`);
+    res.json(updated);
+  } catch (err) {
+    console.error("Update device error:", err);
+    res.status(500).json({ error: "Failed to update device" });
+  }
+});
+
 /**
  * Get all device users across all devices
  */
