@@ -183,13 +183,19 @@ portalRouter.patch("/devices/:deviceId", async (req: AuthRequest, res: Response)
       return;
     }
 
+    // Build update data
+    const updateData: { punchType?: string; name?: string } = {};
+    if (punchType) {
+      updateData.punchType = punchType as string;
+    }
+    if (typeof name === "string") {
+      updateData.name = name;
+    }
+
     // Update device
     const updated = await prisma.device.update({
       where: { id: deviceId },
-      data: {
-        ...(punchType && { punchType: punchType as "BOTH" | "IN_ONLY" | "OUT_ONLY" }),
-        ...(typeof name === "string" && { name }),
-      },
+      data: updateData,
     });
 
     console.log(`[portal] Device updated: tenant=${tid}, device=${deviceId}, punchType=${punchType}`);
