@@ -183,10 +183,14 @@ portalRouter.patch("/devices/:deviceId", async (req: AuthRequest, res: Response)
       return;
     }
 
-    // Build update data
-    const updateData: { punchType?: string; name?: string } = {};
+    // Build update data with proper typing
+    interface UpdateData {
+      punchType?: "BOTH" | "IN_ONLY" | "OUT_ONLY";
+      name?: string;
+    }
+    const updateData: UpdateData = {};
     if (punchType) {
-      updateData.punchType = punchType as string;
+      updateData.punchType = punchType as "BOTH" | "IN_ONLY" | "OUT_ONLY";
     }
     if (typeof name === "string") {
       updateData.name = name;
