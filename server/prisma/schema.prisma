@@ -314,11 +314,12 @@ model SubscriptionPackage {
   price           Float        @default(0)
   currency        String       @default("BDT")
   billingCycle    BillingCycle @default(MONTHLY)
+  tenantId        String?      @map("tenant_id")
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
   services        PackageService[]
-  tenant          Tenant?      @map("tenant_id")
+  tenant          Tenant?      @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
   @@map("subscription_packages")
 }
