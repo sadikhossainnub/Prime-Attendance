@@ -163,12 +163,12 @@ portalRouter.patch("/devices/:deviceId", async (req: AuthRequest, res: Response)
     const tid = tenantId(req);
     const { deviceId } = req.params;
     const { punchType, name } = req.body as {
-      punchType?: unknown;
-      name?: unknown;
+      punchType?: string;
+      name?: string;
     };
 
     // Validate punchType if provided
-    if (punchType && !["BOTH", "IN_ONLY", "OUT_ONLY"].includes(String(punchType))) {
+    if (punchType && !["BOTH", "IN_ONLY", "OUT_ONLY"].includes(punchType)) {
       res.status(400).json({ error: "Invalid punchType. Must be BOTH, IN_ONLY, or OUT_ONLY" });
       return;
     }
@@ -183,23 +183,20 @@ portalRouter.patch("/devices/:deviceId", async (req: AuthRequest, res: Response)
       return;
     }
 
-    // Build update data with proper typing
-    interface UpdateData {
-      punchType?: "BOTH" | "IN_ONLY" | "OUT_ONLY";
-      name?: string;
-    }
-    const updateData: UpdateData = {};
+    // Build update data - only include fields that are provided
+    const updatePayload: any = {};
+    
     if (punchType) {
-      updateData.punchType = punchType as "BOTH" | "IN_ONLY" | "OUT_ONLY";
+      updatePayload.punchType = punchType;
     }
-    if (typeof name === "string") {
-      updateData.name = name;
+    if (name) {
+      updatePayload.name = name;
     }
 
     // Update device
     const updated = await prisma.device.update({
       where: { id: deviceId },
-      data: updateData,
+      data: updatePayload,
     });
 
     console.log(`[portal] Device updated: tenant=${tid}, device=${deviceId}, punchType=${punchType}`);
