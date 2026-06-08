@@ -74,6 +74,8 @@ model Tenant {
   subscriptions    Subscription[]
   invoices         Invoice[]
   deviceUsers      DeviceUser[]
+  subscriptionPackages SubscriptionPackage[]
+  serviceUsages    TenantServiceUsage[]
 
   @@map("tenants")
 }
@@ -335,6 +337,7 @@ model Service {
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
   packages        PackageService[]
+  tenantUsages    TenantServiceUsage[]
 
   @@map("services")
 }
