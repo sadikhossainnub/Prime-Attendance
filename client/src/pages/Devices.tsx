@@ -25,6 +25,13 @@ export default function Devices() {
 
   useEffect(() => {
     load();
+    // Auto-refresh every 15 seconds to pick up online/offline changes
+    const interval = setInterval(() => {
+      portalApi.devices().then(result => {
+        setDevices(Array.isArray(result) ? result : []);
+      }).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const onAdd = async (e: FormEvent) => {
@@ -83,9 +90,17 @@ export default function Devices() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Devices</h2>
-        <p className="text-slate-400 text-sm">ডিভাইস রেজিস্টার করুন এবং Punch Type সেট করুন</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Devices</h2>
+          <p className="text-slate-400 text-sm">ডিভাইস রেজিস্টার করুন এবং Punch Type সেট করুন</p>
+        </div>
+        <button
+          onClick={load}
+          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 font-medium transition flex items-center gap-1.5"
+        >
+          🔄 Refresh
+        </button>
       </div>
 
       {error && (
@@ -197,6 +212,47 @@ export default function Devices() {
           <li>🔓 <strong>IN Only:</strong> শুধুমাত্র office entry punches গ্রহণ করবে</li>
           <li>🚪 <strong>OUT Only:</strong> শুধুমাত্র office exit punches গ্রহণ করবে</li>
         </ul>
+      </div>
+
+      {/* F18 / ZKTeco Troubleshooting */}
+      <div className="p-4 rounded-lg bg-amber-950/20 border border-amber-900/50 text-slate-300 text-sm space-y-3">
+        <p className="font-semibold text-amber-200">🔧 ZKTeco F18 / ডিভাইস Online হচ্ছে না?</p>
+        <p className="text-slate-400 text-xs">নিচের ধাপগুলো অনুসরণ করুন:</p>
+        <ol className="list-decimal list-inside space-y-2 text-slate-300">
+          <li>
+            ডিভাইসে <strong>Menu → Comm → Cloud Server</strong> সেকশনে যান
+          </li>
+          <li>
+            <strong>Enable Cloud Server:</strong> Yes/On করুন
+          </li>
+          <li>
+            <strong>Server Address:</strong> আপনার সার্ভারের IP বা Domain দিন <br/>
+            <code className="text-amber-300 text-xs bg-slate-900/50 px-1 rounded">{window.location.hostname}</code>
+          </li>
+          <li>
+            <strong>Server Port:</strong> <code className="text-amber-300 text-xs bg-slate-900/50 px-1 rounded">{window.location.port || '7788'}</code>
+          </li>
+          <li>
+            ⚠️ F18 ডিভাইসে <strong>"Cloud Server"</strong> না থাকলে <strong>ADMS / Push Server</strong> দেখুন:
+            <ul className="ml-4 mt-1 space-y-1 text-xs text-slate-400 list-disc">
+              <li>Enable ADMS: <strong>Yes</strong></li>
+              <li>Server URL: <code className="text-amber-300 bg-slate-900/50 px-1 rounded">http://{window.location.hostname}:{window.location.port || '7788'}/iclock</code></li>
+            </ul>
+          </li>
+          <li>
+            Network: ডিভাইস ও সার্ভার <strong>একই নেটওয়ার্কে</strong> থাকতে হবে, অথবা Port Forward করতে হবে
+          </li>
+          <li>
+            Firewall: সার্ভারের Port <code className="text-amber-300 text-xs bg-slate-900/50 px-1 rounded">{window.location.port || '7788'}</code> TCP open থাকতে হবে
+          </li>
+          <li>
+            ডিভাইস Restart দিন এবং ১-২ মিনিট অপেক্ষা করুন। Status আপনা আপনি update হবে (প্রতি ১৫ সেকেন্ডে চেক হয়)।
+          </li>
+        </ol>
+        <div className="mt-2 p-2 rounded bg-slate-900/50 text-xs text-slate-400">
+          <strong>💡 মনে রাখুন:</strong> ডিভাইসের Serial Number (SN) উপরে Add করা SN-এর সাথে হুবহু মিলতে হবে।
+          ভুল SN দিলে ডিভাইস register হবে না এবং Offline দেখাবে। SN ডিভাইসের <strong>Menu → System Info</strong> থেকে দেখুন।
+        </div>
       </div>
     </div>
   );

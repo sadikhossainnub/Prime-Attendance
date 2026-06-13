@@ -73,85 +73,116 @@ export default function Attendance() {
 
   const totalPages = Math.ceil(total / 50);
 
+  // Helper to get punch type display
+  const getPunchDisplay = (inOutMode: number | null) => {
+    if (inOutMode === 0) return { label: "IN", emoji: "🔓", color: "bg-emerald-900/50 text-emerald-300" };
+    if (inOutMode === 1) return { label: "OUT", emoji: "🚪", color: "bg-red-900/50 text-red-300" };
+    return { label: "—", emoji: "", color: "bg-slate-800 text-slate-400" };
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold text-white">Attendance</h2>
-          <p className="text-slate-400 text-sm">মোট {total}</p>
+          <p className="text-slate-400 text-sm">মোট {total} রেকর্ড</p>
         </div>
         <div className="flex gap-2">
           <button
             type="button"
             onClick={handleSyncRetry}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-sm"
+            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition"
           >
-            Sync ERPNext
+            🔄 Sync ERPNext
           </button>
-          <button type="button" onClick={exportCsv} disabled={!items.length} className="px-4 py-2 rounded-lg bg-slate-800 text-sm disabled:opacity-40">CSV</button>
+          <button type="button" onClick={exportCsv} disabled={!items.length} className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium disabled:opacity-40">📥 CSV</button>
         </div>
       </div>
+
       {error && (
-        <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300">
-          {error}
+        <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300 text-sm flex items-start gap-2">
+          <span>⚠️</span>
+          <div>{error}</div>
         </div>
       )}
-      <div className="flex flex-wrap gap-3 items-end">
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm" />
-        <input placeholder="Search by ID" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1.5 text-sm w-32" />
-        <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-sm disabled:opacity-50">
-          {loading ? "Loading..." : "Filter"}
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-end p-4 rounded-lg bg-slate-900/40 border border-slate-800">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400 font-semibold">From</label>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-white" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400 font-semibold">To</label>
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-white" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-400 font-semibold">Employee ID</label>
+          <input placeholder="Search by ID" value={pin} onChange={(e) => setPin(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-3 py-1.5 text-sm text-white placeholder-slate-600 w-40" />
+        </div>
+        <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium transition">
+          {loading ? "⏳ Loading..." : "🔍 Filter"}
         </button>
       </div>
+
+      {/* Table */}
       <div className="rounded-xl border border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-slate-900 text-slate-400">
             <tr>
-              <th className="text-left p-3">ID</th>
-              <th className="text-left p-3">Name</th>
-              <th className="text-left p-3">Time</th>
-              <th className="text-left p-3">Device</th>
-              <th className="text-left p-3">In/Out</th>
+              <th className="text-left p-4">Employee ID</th>
+              <th className="text-left p-4">Employee Name</th>
+              <th className="text-left p-4">Punch Time</th>
+              <th className="text-left p-4">Device</th>
+              <th className="text-left p-4">Type</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} className="p-4 text-center text-slate-500">লোড হচ্ছে...</td></tr>
+              <tr><td colSpan={5} className="p-6 text-center text-slate-400">⏳ লোড হচ্ছে...</td></tr>
             ) : items.length === 0 ? (
-              <tr><td colSpan={5} className="p-4 text-center text-slate-500">কোনো রেকর্ড নেই</td></tr>
+              <tr><td colSpan={5} className="p-6 text-center text-slate-400">📭 কোনো রেকর্ড নেই</td></tr>
             ) : (
-              items.map((r) => (
-                <tr key={r.id} className="border-t border-slate-800">
-                  <td className="p-3 font-mono text-xs">{r.userPin}</td>
-                  <td className="p-3">{r.employeeName ?? "—"}</td>
-                  <td className="p-3">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
-                  <td className="p-3 font-mono text-xs">{r.deviceSn}</td>
-                  <td className="p-3">{r.inOutMode === 1 ? "OUT" : r.inOutMode === 0 ? "IN" : "—"}</td>
-                </tr>
-              ))
+              items.map((r) => {
+                const punchInfo = getPunchDisplay(r.inOutMode);
+                return (
+                  <tr key={r.id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                    <td className="p-4 font-mono text-indigo-400 text-xs">{r.userPin}</td>
+                    <td className="p-4 text-slate-300">{r.employeeName ?? "—"}</td>
+                    <td className="p-4 text-slate-300 text-xs">{new Date(r.punchedAt).toLocaleString("bn-BD")}</td>
+                    <td className="p-4 font-mono text-slate-400 text-xs">{r.deviceSn}</td>
+                    <td className="p-4">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${punchInfo.color}`}>
+                        {punchInfo.emoji} {punchInfo.label}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex justify-center gap-2">
+        <div className="flex justify-center items-center gap-3">
           <button
             onClick={() => setPage(Math.max(1, page - 1))}
             disabled={page === 1}
-            className="px-3 py-1 rounded bg-slate-800 text-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-sm font-medium transition"
           >
-            Previous
+            ← Previous
           </button>
-          <span className="px-3 py-1 text-sm text-slate-400">
+          <div className="px-4 py-2 rounded-lg bg-slate-900 text-slate-300 text-sm font-semibold border border-slate-800">
             Page {page} of {totalPages}
-          </span>
+          </div>
           <button
             onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
-            className="px-3 py-1 rounded bg-slate-800 text-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 text-sm font-medium transition"
           >
-            Next
+            Next →
           </button>
         </div>
       )}

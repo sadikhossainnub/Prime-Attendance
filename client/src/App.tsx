@@ -12,7 +12,7 @@ import TenantDetail from "./pages/admin/TenantDetail";
 import Dashboard from "./pages/Dashboard";
 import Attendance from "./pages/Attendance";
 import Devices from "./pages/Devices";
-import Employees from "./pages/Employees";
+import { Employees } from "./pages/Employees";
 import Settings from "./pages/Settings";
 import RawEvents from "./pages/RawEvents";
 import { Billing } from "./pages/Billing";

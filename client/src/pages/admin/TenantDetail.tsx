@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { adminApi, type TenantDetail } from "../../lib/api";
 import { Card } from "../../components/Card";
+import { setSession, type AuthUser } from "../../lib/auth";
 
 export default function TenantDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -71,9 +72,24 @@ export default function TenantDetailPage() {
     if (!tenant) return;
     try {
       const result = await adminApi.getAccessToken(tenant.id);
-      // Store token and redirect to portal
-      localStorage.setItem("token", result.token);
-      localStorage.setItem("user", JSON.stringify(result.user));
+      // Build full AuthUser object matching the expected interface
+      const authUser: AuthUser = {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.user.role as AuthUser["role"],
+        tenantId: result.tenant.id,
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          slug: tenant.slug,
+          plan: tenant.plan,
+          status: tenant.status,
+        },
+      };
+      // Use setSession which stores under correct keys (prime_attendance_token/user)
+      setSession(result.token, authUser);
+      // Full page reload to re-initialize AuthContext with new session
       window.location.href = "/portal";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get access token");

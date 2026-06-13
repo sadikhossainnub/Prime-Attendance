@@ -199,3 +199,19 @@ iclockRouter.all("/ping", async (req: Request, res: Response) => {
     res.type("text/plain").status(500).send("ERROR");
   }
 });
+
+// Catch-all for any other iClock paths (some F18/ZKTeco models use different paths)
+iclockRouter.all("*", async (req: Request, res: Response) => {
+  const sn = getSn(req);
+  try {
+    if (sn) {
+      await handleDeviceConnection(req, sn);
+      console.log(`[iclock] Catch-all: path=${req.path} SN=${sn} method=${req.method}`);
+    }
+    await recordRaw(req, undefined, sn);
+    res.type("text/plain").send("OK");
+  } catch (err) {
+    console.error("[iclock] Catch-all error:", err);
+    res.type("text/plain").status(500).send("ERROR");
+  }
+});

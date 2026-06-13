@@ -355,18 +355,44 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
     if (pin) where.userPin = pin;
     if (deviceSn) where.deviceSn = deviceSn;
 
-    const [items, total] = await Promise.all([
-      prisma.attendanceLog.findMany({
-        where,
-        orderBy: { punchedAt: "desc" },
-        skip,
-        take: limit,
-      }),
-      prisma.attendanceLog.count({ where }),
-    ]);
+    // First get all items with pagination
+    const allItems = await prisma.attendanceLog.findMany({
+      where,
+      orderBy: { punchedAt: "desc" },
+    });
 
-    // Get all unique PINs from items
-    const uniquePins = [...new Set(items.map(item => item.userPin))];
+    // Get device information to check punch type
+    const uniqueDeviceSns = [...new Set(allItems.map(item => item.deviceSn))];
+    const devices = await prisma.device.findMany({
+      where: {
+        tenantId: tid,
+        serialNumber: { in: uniqueDeviceSns },
+      },
+      select: { serialNumber: true, punchType: true },
+    });
+
+    const deviceMap = new Map(devices.map(d => [d.serialNumber, d.punchType]));
+
+    // Filter items based on device punch type
+    const filteredItems = allItems.filter(item => {
+      const punchType = deviceMap.get(item.deviceSn);
+      
+      // If punchType not found, include it (backward compatibility)
+      if (!punchType) return true;
+      
+      // Check if punch matches device configuration
+      if (punchType === "BOTH") return true; // Accept all
+      if (punchType === "IN_ONLY" && item.inOutMode === 0) return true; // Accept only IN (0)
+      if (punchType === "OUT_ONLY" && item.inOutMode === 1) return true; // Accept only OUT (1)
+      
+      return false;
+    });
+
+    // Apply pagination after filtering
+    const paginatedItems = filteredItems.slice(skip, skip + limit);
+
+    // Get all unique PINs from paginated items
+    const uniquePins = [...new Set(paginatedItems.map(item => item.userPin))];
 
     // Fetch all mappings in one query
     const mappings = await prisma.employeeMapping.findMany({
@@ -381,12 +407,18 @@ portalRouter.get("/attendance", async (req: AuthRequest, res: Response) => {
     const mappingMap = new Map(mappings.map(m => [m.userPin, m.employeeName]));
 
     // Enrich items with employee names
-    const enrichedItems = items.map(item => ({
+    const enrichedItems = paginatedItems.map(item => ({
       ...item,
       employeeName: mappingMap.get(item.userPin) ?? null,
     }));
 
-    res.json({ items: enrichedItems, total, page, limit, totalPages: Math.ceil(total / limit) });
+    res.json({
+      items: enrichedItems,
+      total: filteredItems.length,
+      page,
+      limit,
+      totalPages: Math.ceil(filteredItems.length / limit),
+    });
   } catch (err) {
     console.error("Attendance error:", err);
     res.status(500).json({ error: "Failed to load attendance" });
