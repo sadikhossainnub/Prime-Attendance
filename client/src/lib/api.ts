@@ -168,6 +168,14 @@ export const portalApi = {
       count: number;
       employees: ErpnextEmployee[];
     }>("/api/portal/employees/erpnext"),
+  syncErpnextEmployees: () =>
+    apiFetch<{
+      success: boolean;
+      message: string;
+      synced: number;
+      skipped: number;
+      errors: string[];
+    }>("/api/portal/employees/sync", { method: "POST" }),
   fetchErpnextEmployee: (employeeId: string) =>
     apiFetch<{
       success: boolean;

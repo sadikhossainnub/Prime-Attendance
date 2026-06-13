@@ -6,6 +6,8 @@ export const Employees = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [erpnextEnabled, setErpnextEnabled] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Form states
   const [userPin, setUserPin] = useState("");
@@ -24,8 +26,34 @@ export const Employees = () => {
     }
   };
 
+  const handleErpnextSync = async () => {
+    setSyncing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await portalApi.syncErpnextEmployees();
+      if (result.success) {
+        setSuccess(`✅ ERPNext Sync Complete! Synced: ${result.synced}, Skipped: ${result.skipped}.`);
+        if (result.errors && result.errors.length > 0) {
+          setError(`Warning: Some employees failed to sync:\n${result.errors.join("\n")}`);
+        }
+        await load();
+      }
+    } catch (err) {
+      console.error("ERPNext sync failed:", err);
+      setError(err instanceof Error ? err.message : "Failed to sync with ERPNext");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   useEffect(() => {
     load();
+    portalApi.settings()
+      .then((data) => {
+        setErpnextEnabled(data.erpnextEnabled || false);
+      })
+      .catch(() => {});
   }, []);
 
   const clearForm = () => {
@@ -143,9 +171,20 @@ export const Employees = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-white">Employees</h2>
-        <p className="text-slate-400 text-sm">Manage employee records & device mapping</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Employees</h2>
+          <p className="text-slate-400 text-sm">Manage employee records & device mapping</p>
+        </div>
+        {erpnextEnabled && (
+          <button
+            onClick={handleErpnextSync}
+            disabled={syncing}
+            className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium text-white transition flex items-center gap-1.5"
+          >
+            {syncing ? "⏳ Syncing..." : "🔄 Sync from ERPNext"}
+          </button>
+        )}
       </div>
 
       {error && (

@@ -199,13 +199,13 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
   }
 
   // Fetch all employees with pagination
-  const allEmployees: Array<{ name: string; employee_name?: string }> = [];
+  const allEmployees: Array<{ name: string; employee_name?: string; attendance_device_id?: string | null }> = [];
   let pageStart = 0;
   const pageSize = 100;
   let hasMore = true;
 
   while (hasMore) {
-    const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee?fields=["name","employee_name"]&limit_page_length=${pageSize}&limit_start=${pageStart}`;
+    const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee?fields=["name","employee_name","attendance_device_id"]&limit_page_length=${pageSize}&limit_start=${pageStart}`;
 
     console.log(`[erpnext] Fetching employees page: tenant=${tenant.slug}, offset=${pageStart}`);
 
@@ -226,6 +226,7 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
       interface ErpnextEmployee {
         name: string;
         employee_name?: string;
+        attendance_device_id?: string | null;
       }
 
       interface ErpnextResponse {
@@ -289,21 +290,40 @@ export async function syncEmployeesFromErpnext(tenantId: string): Promise<{ sync
         }
         result.skipped++;
       } else {
-        // Create new mapping - generate a simple numeric PIN
+        // Create new mapping - check attendance_device_id first
         let pin = "";
-        let attempt = 0;
 
-        // Try to generate a unique numeric PIN (starting from 10000)
-        while (attempt < 1000) {
-          const candidatePin = String(10000 + attempt);
-          const existingPin = await prisma.employeeMapping.findUnique({
-            where: { tenantId_userPin: { tenantId, userPin: candidatePin } },
-          });
-          if (!existingPin) {
-            pin = candidatePin;
-            break;
+        if (emp.attendance_device_id) {
+          const cleanedPin = String(emp.attendance_device_id).trim();
+          const isNumeric = /^\d+$/.test(cleanedPin);
+          if (isNumeric) {
+            const existingPin = await prisma.employeeMapping.findUnique({
+              where: { tenantId_userPin: { tenantId, userPin: cleanedPin } },
+            });
+            if (!existingPin) {
+              pin = cleanedPin;
+            } else {
+              console.warn(`[erpnext] attendance_device_id ${cleanedPin} already in use, falling back to auto-generated PIN.`);
+            }
+          } else {
+            console.warn(`[erpnext] attendance_device_id ${cleanedPin} is not numeric, falling back to auto-generated PIN.`);
           }
-          attempt++;
+        }
+
+        // Fallback to auto-generated PIN
+        if (!pin) {
+          let attempt = 0;
+          while (attempt < 1000) {
+            const candidatePin = String(10000 + attempt);
+            const existingPin = await prisma.employeeMapping.findUnique({
+              where: { tenantId_userPin: { tenantId, userPin: candidatePin } },
+            });
+            if (!existingPin) {
+              pin = candidatePin;
+              break;
+            }
+            attempt++;
+          }
         }
 
         if (!pin) {

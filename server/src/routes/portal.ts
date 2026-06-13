@@ -531,6 +531,39 @@ portalRouter.get("/employees/erpnext", async (req: AuthRequest, res: Response) =
 });
 
 /**
+ * Sync employees from ERPNext to local mappings
+ * POST /api/portal/employees/sync
+ */
+portalRouter.post("/employees/sync", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    
+    // Check if ERPNext is enabled
+    const erpnextEnabled = await isErpnextEnabledForTenant(tid);
+    if (!erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext integration is not enabled for this tenant" });
+      return;
+    }
+
+    const { syncEmployeesFromErpnext } = await import("../services/erpnext.js");
+    const result = await syncEmployeesFromErpnext(tid);
+    
+    res.json({ 
+      success: true, 
+      message: "Employee sync completed",
+      synced: result.synced,
+      skipped: result.skipped,
+      errors: result.errors
+    });
+  } catch (err) {
+    console.error("Sync ERPNext employees error:", err);
+    const message = err instanceof Error ? err.message : "Failed to sync employees from ERPNext";
+    res.status(500).json({ error: message });
+  }
+});
+
+
+/**
  * Fetch single employee from ERPNext by ID
  * GET /api/portal/employees/erpnext/:employeeId
  */
