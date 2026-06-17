@@ -145,6 +145,28 @@ export const portalApi = {
         syncedAt: string | null;
       }>;
     }>("/api/portal/sync-status"),
+  syncBulk: (params: { fromDate?: string; toDate?: string; limit?: number; batchSize?: number }) =>
+    apiFetch<{
+      success: boolean;
+      message: string;
+      queued: number;
+      batchSize?: number;
+      dateRange: { from: string; to: string };
+    }>("/api/portal/sync-bulk", {
+      method: "POST",
+      body: JSON.stringify(params),
+    }),
+  getLastSyncTimestamp: () =>
+    apiFetch<{
+      lastSyncedAt: string | null;
+      lastPunchedAt: string | null;
+      lastCheckinId: string | null;
+      stats: {
+        total: number;
+        synced: number;
+        unsynced: number;
+      };
+    }>("/api/portal/sync-last-timestamp"),
   rawEvents: (limit?: number) => apiFetch<DeviceRawEvent[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
   deviceUsers: () => apiFetch<{
     devices: Array<{

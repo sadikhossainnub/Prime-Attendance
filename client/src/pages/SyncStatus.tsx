@@ -21,17 +21,40 @@ interface SyncStatusData {
   }>;
 }
 
+interface LastSyncInfo {
+  lastSyncedAt: string | null;
+  lastPunchedAt: string | null;
+  lastCheckinId: string | null;
+  stats: {
+    total: number;
+    synced: number;
+    unsynced: number;
+  };
+}
+
 export function SyncStatus() {
   const [data, setData] = useState<SyncStatusData | null>(null);
+  const [lastSync, setLastSync] = useState<LastSyncInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  
+  // Bulk sync form state
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [bulkLimit, setBulkLimit] = useState(1000);
+  const [batchSize, setBatchSize] = useState(20);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
 
   const load = async () => {
     try {
       setError(null);
-      const result = await portalApi.syncStatus();
-      setData(result);
+      const [syncResult, lastSyncResult] = await Promise.all([
+        portalApi.syncStatus(),
+        portalApi.getLastSyncTimestamp(),
+      ]);
+      setData(syncResult);
+      setLastSync(lastSyncResult);
     } catch (err) {
       console.error("Failed to load sync status:", err);
       setError(err instanceof Error ? err.message : "Failed to load sync status");
@@ -58,6 +81,30 @@ export function SyncStatus() {
       await load();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to retry sync");
+    }
+  };
+
+  const handleBulkSync = async () => {
+    if (!fromDate && !toDate) {
+      if (!confirm("শুরু এবং শেষ তারিখ উল্লেখ করা হয়নি। সমস্ত unsynced ডাটা sync করবেন?")) return;
+    } else {
+      if (!confirm(`তারিখ রেঞ্জ ${fromDate || "শুরু"} থেকে ${toDate || "এখন"} পর্যন্ত bulk sync শুরু করবেন?`)) return;
+    }
+
+    setBulkSyncing(true);
+    try {
+      const result = await portalApi.syncBulk({
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+        limit: bulkLimit,
+        batchSize: batchSize,
+      });
+      alert(`✅ ${result.message}\n\nQueued: ${result.queued}\nBatch Size: ${result.batchSize || batchSize} parallel\nDate Range: ${result.dateRange.from} to ${result.dateRange.to}`);
+      await load();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to start bulk sync");
+    } finally {
+      setBulkSyncing(false);
     }
   };
 
@@ -155,6 +202,150 @@ export function SyncStatus() {
         <div className="p-4 rounded-xl border border-slate-700 bg-slate-800/40">
           <p className="text-slate-400 text-xs font-medium mb-1">⊘ Skipped</p>
           <p className="text-2xl font-bold text-slate-300">{data.skipped}</p>
+        </div>
+      </div>
+
+      {/* Last Sync Info */}
+      {lastSync && (
+        <div className="p-4 rounded-xl border border-indigo-800 bg-indigo-900/20">
+          <h3 className="text-lg font-semibold text-indigo-300 mb-3">🕒 সর্বশেষ Sync তথ্য</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-slate-400 mb-1">সর্বশেষ Sync সময়:</p>
+              <p className="text-white font-mono">
+                {lastSync.lastSyncedAt ? new Date(lastSync.lastSyncedAt).toLocaleString("bn-BD") : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-1">সর্বশেষ Punch সময়:</p>
+              <p className="text-white font-mono">
+                {lastSync.lastPunchedAt ? new Date(lastSync.lastPunchedAt).toLocaleString("bn-BD") : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-400 mb-1">সর্বশেষ ERPNext Checkin ID:</p>
+              <p className="text-emerald-400 font-mono text-xs">
+                {lastSync.lastCheckinId || "—"}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Sync Section */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+        <div className="p-4 border-b border-slate-800 bg-slate-900/60">
+          <h3 className="text-lg font-semibold text-white">📦 Bulk Historical Sync</h3>
+          <p className="text-slate-400 text-sm mt-1">
+            সমস্ত historical data একবারে ERPNext-এ push করুন। প্রথমবার bulk sync চালান, তারপর daily automatic sync হবে।
+          </p>
+        </div>
+        
+        <div className="p-6 space-y-4">
+          {/* Date Range Inputs */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                📅 শুরুর তারিখ (From Date)
+              </label>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="YYYY-MM-DD"
+              />
+              <p className="text-xs text-slate-500 mt-1">খালি থাকলে সব পুরাতন data</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                📅 শেষ তারিখ (To Date)
+              </label>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                placeholder="YYYY-MM-DD"
+              />
+              <p className="text-xs text-slate-500 mt-1">খালি থাকলে আজ পর্যন্ত</p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                🔢 সর্বোচ্চ সংখ্যা (Limit)
+              </label>
+              <input
+                type="number"
+                value={bulkLimit}
+                onChange={(e) => setBulkLimit(Math.max(1, parseInt(e.target.value) || 1000))}
+                min={1}
+                max={10000}
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">একবারে সর্বোচ্চ কতটি log</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                ⚡ Batch Size (Parallel)
+              </label>
+              <input
+                type="number"
+                value={batchSize}
+                onChange={(e) => setBatchSize(Math.max(1, Math.min(50, parseInt(e.target.value) || 20)))}
+                min={1}
+                max={50}
+                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">একসাথে কতটি sync (দ্রুত)</p>
+            </div>
+          </div>
+
+          {/* Sync Button and Stats */}
+          <div className="flex items-center justify-between pt-2">
+            <div className="text-sm text-slate-400">
+              {lastSync && (
+                <>
+                  <p>মোট Logs: <span className="text-white font-semibold">{lastSync.stats.total}</span></p>
+                  <p>Synced: <span className="text-emerald-400 font-semibold">{lastSync.stats.synced}</span></p>
+                  <p>Unsynced: <span className="text-yellow-400 font-semibold">{lastSync.stats.unsynced}</span></p>
+                </>
+              )}
+            </div>
+            
+            <button
+              onClick={handleBulkSync}
+              disabled={bulkSyncing}
+              className={`px-6 py-3 rounded-lg font-semibold text-white transition ${
+                bulkSyncing
+                  ? "bg-slate-700 cursor-not-allowed"
+                  : "bg-indigo-600 hover:bg-indigo-700"
+              }`}
+            >
+              {bulkSyncing ? (
+                <>
+                  <span className="inline-block animate-spin mr-2">⏳</span>
+                  Syncing...
+                </>
+              ) : (
+                <>🚀 Bulk Sync শুরু করুন</>
+              )}
+            </button>
+          </div>
+
+          {/* Info Box */}
+          <div className="p-4 rounded-lg bg-blue-900/20 border border-blue-800 text-blue-300 text-sm">
+            <p className="font-semibold mb-2">ℹ️ কিভাবে কাজ করে:</p>
+            <ul className="space-y-1 ml-4 text-xs text-blue-400 list-disc">
+              <li>প্রথমবার: সমস্ত historical unsynced data ERPNext-এ push করুন (তারিখ রেঞ্জ উল্লেখ করুন বা খালি রাখুন)</li>
+              <li><strong>⚡ Batch Processing:</strong> {batchSize}টি log একসাথে parallel-এ sync হবে - অনেক দ্রুত!</li>
+              <li>উদাহরণ: 1000 logs, batch size 20 = ~50 batches = অনেক দ্রুত সম্পন্ন হবে</li>
+              <li>নিয়মিত: প্রতিদিন auto-sync হবে নতুন punches এর জন্য (manual sync করার দরকার নেই)</li>
+              <li>Failed logs "Retry All" বাটন দিয়ে পুনরায় sync করতে পারবেন</li>
+            </ul>
+          </div>
         </div>
       </div>
 

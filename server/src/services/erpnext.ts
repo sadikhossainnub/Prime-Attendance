@@ -176,6 +176,62 @@ async function syncAttendanceToErpnext(
 }
 
 /**
+ * Batch sync multiple attendance logs in parallel
+ * Much faster than sequential sync - processes multiple logs concurrently
+ */
+export async function batchSyncAttendance(
+  logIds: string[],
+  batchSize: number = 20
+): Promise<{ synced: number; failed: number; skipped: number; errors: string[] }> {
+  const result = { synced: 0, failed: 0, skipped: 0, errors: [] as string[] };
+
+  console.log(`[erpnext] 🚀 Starting batch sync: total=${logIds.length}, batchSize=${batchSize}`);
+
+  // Process in batches to avoid overwhelming ERPNext API
+  for (let i = 0; i < logIds.length; i += batchSize) {
+    const batch = logIds.slice(i, i + batchSize);
+    console.log(`[erpnext] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(logIds.length / batchSize)} (${batch.length} logs)`);
+
+    // Process batch in parallel using Promise.allSettled
+    const promises = batch.map(async (logId) => {
+      try {
+        await queueAttendanceSync(logId);
+        return { status: "success" as const, logId };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        return { status: "error" as const, logId, message };
+      }
+    });
+
+    const results = await Promise.allSettled(promises);
+
+    // Count results
+    for (const res of results) {
+      if (res.status === "fulfilled") {
+        if (res.value.status === "success") {
+          result.synced++;
+        } else {
+          result.failed++;
+          result.errors.push(`Log ${res.value.logId}: ${res.value.message}`);
+        }
+      } else {
+        result.failed++;
+        result.errors.push(`Batch processing error: ${res.reason}`);
+      }
+    }
+
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < logIds.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+
+  console.log(`[erpnext] ✅ Batch sync complete: synced=${result.synced}, failed=${result.failed}, skipped=${result.skipped}`);
+
+  return result;
+}
+
+/**
  * Check if ERPNext is enabled for a specific tenant
  */
 export async function isErpnextEnabledForTenant(tenantId: string): Promise<boolean> {

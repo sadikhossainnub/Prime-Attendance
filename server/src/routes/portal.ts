@@ -1,5 +1,6 @@
 import { Router, type Response } from "express";
 import { prisma } from "../lib/prisma.js";
+import { SyncStatus } from "@prisma/client";
 import {
   requireAuth,
   requireTenantUser,
@@ -8,6 +9,7 @@ import {
 import { 
   isErpnextEnabledForTenant, 
   queueAttendanceSync, 
+  batchSyncAttendance,
   fetchEmployeesFromErpnext,
   fetchEmployeeFromErpnext,
   type ErpnextEmployeeDetails
@@ -796,6 +798,148 @@ portalRouter.get("/sync-status", async (req: AuthRequest, res: Response) => {
   } catch (err) {
     console.error("Sync status error:", err);
     res.status(500).json({ error: "Failed to load sync status" });
+  }
+});
+
+/**
+ * Bulk sync all historical data to ERPNext with batch processing
+ * POST /api/portal/sync-bulk
+ */
+portalRouter.post("/sync-bulk", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { fromDate, toDate, limit, batchSize } = req.body as {
+      fromDate?: string;
+      toDate?: string;
+      limit?: number;
+      batchSize?: number;
+    };
+
+    // Check if ERPNext is enabled
+    const erpnextEnabled = await isErpnextEnabledForTenant(tid);
+    if (!erpnextEnabled) {
+      res.status(400).json({ error: "ERPNext sync is not enabled for this tenant" });
+      return;
+    }
+
+    // Build date filter
+    const where: {
+      tenantId: string;
+      syncStatus?: { in: SyncStatus[] };
+      punchedAt?: { gte?: Date; lte?: Date };
+    } = {
+      tenantId: tid,
+      syncStatus: { in: [SyncStatus.FAILED, SyncStatus.SKIPPED, SyncStatus.PENDING] },
+    };
+
+    if (fromDate || toDate) {
+      where.punchedAt = {};
+      if (fromDate) where.punchedAt.gte = new Date(fromDate);
+      if (toDate) where.punchedAt.lte = new Date(toDate);
+    }
+
+    // Get unsynced logs
+    const logs = await prisma.attendanceLog.findMany({
+      where,
+      orderBy: { punchedAt: "asc" },
+      take: limit || 1000, // Default 1000, max can be adjusted
+      select: { id: true, punchedAt: true },
+    });
+
+    if (logs.length === 0) {
+      res.json({
+        success: true,
+        message: "কোনো unsynced log পাওয়া যায়নি",
+        synced: 0,
+        failed: 0,
+        skipped: 0,
+        total: 0,
+        dateRange: { from: fromDate || null, to: toDate || null },
+      });
+      return;
+    }
+
+    const logIds = logs.map(l => l.id);
+    const effectiveBatchSize = batchSize || 20; // Default 20 concurrent requests
+
+    console.log(`[portal] 🚀 Batch sync started: tenant=${tid}, count=${logs.length}, batchSize=${effectiveBatchSize}, from=${fromDate || "all"}, to=${toDate || "now"}`);
+    
+    // Start batch sync in background - don't await to return response quickly
+    void (async () => {
+      try {
+        await batchSyncAttendance(logIds, effectiveBatchSize);
+        console.log(`[portal] ✅ Batch sync completed: tenant=${tid}, count=${logs.length}`);
+      } catch (err) {
+        console.error(`[portal] ❌ Batch sync failed: tenant=${tid}`, err);
+      }
+    })();
+
+    // Return immediately with queued status
+    res.json({
+      success: true,
+      message: `${logs.length}টি attendance log batch sync এর জন্য queued করা হয়েছে। ${effectiveBatchSize}টি করে parallel processing হচ্ছে।`,
+      queued: logs.length,
+      batchSize: effectiveBatchSize,
+      dateRange: {
+        from: logs[0].punchedAt.toISOString(),
+        to: logs[logs.length - 1].punchedAt.toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("Bulk sync error:", err);
+    res.status(500).json({ error: "Failed to start bulk sync" });
+  }
+});
+
+/**
+ * Get last synced timestamp from local DB
+ * GET /api/portal/sync-last-timestamp
+ */
+portalRouter.get("/sync-last-timestamp", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+
+    // Get the latest successfully synced log
+    const lastSynced = await prisma.attendanceLog.findFirst({
+      where: {
+        tenantId: tid,
+        syncStatus: "SYNCED",
+        erpnextCheckinId: { not: null },
+      },
+      orderBy: { syncedAt: "desc" },
+      select: {
+        syncedAt: true,
+        punchedAt: true,
+        erpnextCheckinId: true,
+        userPin: true,
+      },
+    });
+
+    // Get counts
+    const [totalLogs, syncedCount, unsyncedCount] = await Promise.all([
+      prisma.attendanceLog.count({ where: { tenantId: tid } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "SYNCED" } }),
+      prisma.attendanceLog.count({ 
+        where: { 
+          tenantId: tid, 
+          syncStatus: { in: ["PENDING", "FAILED", "SKIPPED"] },
+        },
+      }),
+    ]);
+
+    res.json({
+      lastSyncedAt: lastSynced?.syncedAt || null,
+      lastPunchedAt: lastSynced?.punchedAt || null,
+      lastCheckinId: lastSynced?.erpnextCheckinId || null,
+      stats: {
+        total: totalLogs,
+        synced: syncedCount,
+        unsynced: unsyncedCount,
+      },
+    });
+  } catch (err) {
+    console.error("Last timestamp error:", err);
+    res.status(500).json({ error: "Failed to get last sync timestamp" });
   }
 });
 
