@@ -713,11 +713,12 @@ portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    // Find failed or skipped logs for this tenant
+    // Find FAILED or PENDING logs only (NOT permanently failed)
+    // PERMANENTLY_FAILED logs should not be retried automatically
     const logs = await prisma.attendanceLog.findMany({
       where: {
         tenantId: tid,
-        syncStatus: { in: ["FAILED", "SKIPPED", "PENDING"] },
+        syncStatus: { in: ["FAILED", "PENDING"] },
       },
       select: { id: true },
       take: 100, // Limit to 100 at a time
@@ -728,9 +729,9 @@ portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
       void queueAttendanceSync(log.id);
     }
 
-    console.log(`[portal] Sync retry triggered: tenant=${tid}, count=${logs.length}`);
+    console.log(`[portal] Sync retry triggered (excluding permanently failed): tenant=${tid}, count=${logs.length}`);
     res.json({
-      message: `Triggered sync retry for ${logs.length} logs`,
+      message: `Triggered sync retry for ${logs.length} logs (excluding permanently failed)`,
       count: logs.length,
     });
   } catch (err) {
@@ -743,16 +744,17 @@ portalRouter.get("/sync-status", async (req: AuthRequest, res: Response) => {
   try {
     const tid = tenantId(req);
 
-    // Get sync status counts
-    const [totalLogs, synced, pending, failed, skipped] = await Promise.all([
+    // Get sync status counts including permanently failed
+    const [totalLogs, synced, pending, failed, skipped, permanentlyFailed] = await Promise.all([
       prisma.attendanceLog.count({ where: { tenantId: tid } }),
       prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "SYNCED" } }),
       prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "PENDING" } }),
       prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "FAILED" } }),
       prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "SKIPPED" } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "PERMANENTLY_FAILED" } }),
     ]);
 
-    // Get recent logs with employee names
+    // Get recent logs with employee names and retry count
     const recentLogs = await prisma.attendanceLog.findMany({
       where: { tenantId: tid },
       orderBy: { punchedAt: "desc" },
@@ -764,6 +766,7 @@ portalRouter.get("/sync-status", async (req: AuthRequest, res: Response) => {
         deviceSn: true,
         inOutMode: true,
         syncStatus: true,
+        syncRetryCount: true,
         erpnextCheckinId: true,
         syncError: true,
         syncedAt: true,
@@ -793,6 +796,7 @@ portalRouter.get("/sync-status", async (req: AuthRequest, res: Response) => {
       pending,
       failed,
       skipped,
+      permanentlyFailed,
       recentLogs: enrichedLogs,
     });
   } catch (err) {

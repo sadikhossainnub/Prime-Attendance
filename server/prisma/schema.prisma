@@ -135,6 +135,7 @@ model AttendanceLog {
   workCode          Int?       @map("work_code")
   rawLine           String?    @map("raw_line")
   syncStatus        SyncStatus @default(PENDING) @map("sync_status")
+  syncRetryCount    Int        @default(0) @map("sync_retry_count")
   erpnextCheckinId  String?    @map("erpnext_checkin_id")
   syncedAt          DateTime?  @map("synced_at")
   syncError         String?    @map("sync_error")
@@ -155,6 +156,7 @@ enum SyncStatus {
   SYNCED
   FAILED
   SKIPPED
+  PERMANENTLY_FAILED
 }
 
 model EmployeeMapping {

@@ -7,6 +7,7 @@ interface SyncStatusData {
   pending: number;
   failed: number;
   skipped: number;
+  permanentlyFailed: number;
   recentLogs: Array<{
     id: string;
     userPin: string;
@@ -15,6 +16,7 @@ interface SyncStatusData {
     deviceSn: string;
     inOutMode: number | null;
     syncStatus: string;
+    syncRetryCount: number;
     erpnextCheckinId: string | null;
     syncError: string | null;
     syncedAt: string | null;
@@ -113,6 +115,7 @@ export function SyncStatus() {
       SYNCED: { label: "✅ Synced", color: "bg-emerald-900/50 text-emerald-300 border-emerald-700" },
       PENDING: { label: "⏳ Pending", color: "bg-yellow-900/50 text-yellow-300 border-yellow-700" },
       FAILED: { label: "❌ Failed", color: "bg-red-900/50 text-red-300 border-red-700" },
+      PERMANENTLY_FAILED: { label: "🚫 Permanent Fail", color: "bg-gray-900 text-gray-400 border-gray-700" },
       SKIPPED: { label: "⊘ Skipped", color: "bg-slate-800 text-slate-400 border-slate-700" },
     };
     return badges[status as keyof typeof badges] || { label: status, color: "bg-slate-800 text-slate-400 border-slate-700" };
@@ -173,7 +176,7 @@ export function SyncStatus() {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/40">
           <p className="text-slate-400 text-xs font-medium mb-1">Total Logs</p>
           <p className="text-2xl font-bold text-white">{data.totalLogs}</p>
@@ -198,6 +201,11 @@ export function SyncStatus() {
               Retry All
             </button>
           )}
+        </div>
+        <div className="p-4 rounded-xl border border-gray-700 bg-gray-900/40">
+          <p className="text-gray-400 text-xs font-medium mb-1">🚫 Permanent Fail</p>
+          <p className="text-2xl font-bold text-gray-300">{data.permanentlyFailed}</p>
+          <p className="text-xs text-gray-500 mt-1">Max retries (3×)</p>
         </div>
         <div className="p-4 rounded-xl border border-slate-700 bg-slate-800/40">
           <p className="text-slate-400 text-xs font-medium mb-1">⊘ Skipped</p>
@@ -364,6 +372,7 @@ export function SyncStatus() {
                 <th className="text-left p-4">Device</th>
                 <th className="text-left p-4">Type</th>
                 <th className="text-left p-4">Status</th>
+                <th className="text-left p-4">Retries</th>
                 <th className="text-left p-4">ERPNext ID</th>
                 <th className="text-left p-4">Error</th>
               </tr>
@@ -371,7 +380,7 @@ export function SyncStatus() {
             <tbody>
               {data.recentLogs.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     📭 No attendance logs found
                   </td>
                 </tr>
@@ -410,6 +419,15 @@ export function SyncStatus() {
                         )}
                       </td>
                       <td className="p-4">
+                        {log.syncRetryCount > 0 ? (
+                          <span className={`text-xs font-semibold ${log.syncStatus === 'PERMANENTLY_FAILED' ? 'text-gray-400' : 'text-orange-400'}`}>
+                            {log.syncRetryCount}/3
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="p-4">
                         {log.erpnextCheckinId ? (
                           <code className="text-xs text-emerald-400 bg-emerald-900/20 px-2 py-1 rounded">
                             {log.erpnextCheckinId}
@@ -442,8 +460,16 @@ export function SyncStatus() {
         <ul className="space-y-1 ml-4 text-xs text-indigo-400">
           <li>✅ <strong>Synced:</strong> Successfully pushed to ERPNext Employee Checkin</li>
           <li>⏳ <strong>Pending:</strong> Waiting to be synced (will retry automatically)</li>
-          <li>❌ <strong>Failed:</strong> Sync error occurred - check error message and employee mapping</li>
+          <li>❌ <strong>Failed:</strong> Sync error occurred - will auto-retry up to 3 times</li>
+          <li>🚫 <strong>Permanent Fail:</strong> Failed 3 times - will NOT retry automatically (fix error manually)</li>
           <li>⊘ <strong>Skipped:</strong> ERPNext disabled or no employee mapping found</li>
+        </ul>
+        <p className="font-semibold mt-4">🔄 Retry Logic:</p>
+        <ul className="space-y-1 ml-4 text-xs text-indigo-400">
+          <li>Automatic retry: Maximum <strong>3 attempts</strong> per log</li>
+          <li>After 3 failed attempts → status changes to <strong>PERMANENTLY_FAILED</strong></li>
+          <li>"Retry All" button: শুধুমাত্র FAILED logs retry করবে (permanently failed না)</li>
+          <li>Fix করার জন্য: employee mapping check করুন, ERPNext config verify করুন</li>
         </ul>
       </div>
     </div>

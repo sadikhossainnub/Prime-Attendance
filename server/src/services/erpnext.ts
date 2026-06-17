@@ -4,10 +4,30 @@ import { prisma } from "../lib/prisma.js";
 /**
  * ERPNext sync service — Tenant-level integration.
  * Fetches tenant-specific ERPNext config and syncs attendance logs.
+ * Implements retry limit to prevent infinite retry loops.
  */
-export async function queueAttendanceSync(logId: string): Promise<void> {
+export async function queueAttendanceSync(logId: string, maxRetries: number = 3): Promise<void> {
   const log = await prisma.attendanceLog.findUnique({ where: { id: logId } });
   if (!log) return;
+
+  // Check if already permanently failed (exceeded retry limit)
+  if (log.syncStatus === "PERMANENTLY_FAILED") {
+    console.log(`[erpnext] Sync skipped: log=${logId} already marked as PERMANENTLY_FAILED`);
+    return;
+  }
+
+  // Check retry count - stop if exceeded max retries
+  if (log.syncRetryCount >= maxRetries) {
+    console.warn(`[erpnext] Max retries exceeded: log=${logId}, retries=${log.syncRetryCount}/${maxRetries}`);
+    await prisma.attendanceLog.update({
+      where: { id: logId },
+      data: {
+        syncStatus: "PERMANENTLY_FAILED",
+        syncError: `Max retry limit exceeded (${maxRetries} attempts). Last error: ${log.syncError || "Unknown"}`,
+      },
+    });
+    return;
+  }
 
   // Fetch tenant's ERPNext config
   const tenant = await prisma.tenant.findUnique({
@@ -39,19 +59,31 @@ export async function queueAttendanceSync(logId: string): Promise<void> {
         syncStatus: "SYNCED",
         syncedAt: new Date(),
         syncError: null,
+        syncRetryCount: 0, // Reset retry count on success
       },
     });
-    console.log(`[erpnext] Sync successful: tenant=${tenant.slug}, log=${logId}`);
+    console.log(`[erpnext] ✅ Sync successful: tenant=${tenant.slug}, log=${logId}, attempt=${log.syncRetryCount + 1}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown sync error";
+    const newRetryCount = log.syncRetryCount + 1;
+    
+    // Determine if this should be permanently failed
+    const newStatus = newRetryCount >= maxRetries ? "PERMANENTLY_FAILED" : "FAILED";
+    
     await prisma.attendanceLog.update({
       where: { id: logId },
       data: {
-        syncStatus: "FAILED",
+        syncStatus: newStatus,
         syncError: message,
+        syncRetryCount: newRetryCount,
       },
     });
-    console.error(`[erpnext] Sync failed: tenant=${tenant.slug}, log=${logId}, error=${message}`);
+    
+    if (newStatus === "PERMANENTLY_FAILED") {
+      console.error(`[erpnext] ❌ PERMANENTLY FAILED: tenant=${tenant.slug}, log=${logId}, retries=${newRetryCount}/${maxRetries}, error=${message}`);
+    } else {
+      console.error(`[erpnext] ⚠️ Sync failed (will retry): tenant=${tenant.slug}, log=${logId}, retry=${newRetryCount}/${maxRetries}, error=${message}`);
+    }
   }
 }
 
