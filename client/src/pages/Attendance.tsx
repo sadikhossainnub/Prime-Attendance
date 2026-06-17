@@ -63,7 +63,9 @@ export default function Attendance() {
     if (!confirm("Sync retry শুরু করবেন?")) return;
     try {
       setError(null);
+      setSuccess(null);
       const r = await portalApi.syncRetry();
+      setSuccess(`🔄 Sync retry triggered for ${r.count} logs`);
       alert(r.message);
     } catch (err) {
       console.error("Sync retry failed:", err);
@@ -123,6 +125,12 @@ export default function Attendance() {
         <button type="button" onClick={handleFilter} disabled={loading} className="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium transition">
           {loading ? "⏳ Loading..." : "🔍 Filter"}
         </button>
+      </div>
+
+      {/* Info Box about Punch Filtering */}
+      <div className="p-4 rounded-lg bg-indigo-900/20 border border-indigo-800 text-indigo-300 text-sm">
+        <p className="font-medium mb-1">📌 Punch Type Filtering Active</p>
+        <p className="text-xs text-indigo-400">Only punches matching each device's configured punch type (IN_ONLY/OUT_ONLY/BOTH) are displayed here.</p>
       </div>
 
       {/* Table */}

@@ -93,31 +93,60 @@ async function syncAttendanceToErpnext(
   }
 
   // Determine log type (IN/OUT)
-  const logType = log.inOutMode === 1 ? "OUT" : "IN";
+  // inOutMode: 0 = IN, 1 = OUT, null = unknown
+  const logType = log.inOutMode === 1 ? "OUT" : log.inOutMode === 0 ? "IN" : null;
+  
+  if (!logType) {
+    throw new Error(`Invalid inOutMode ${log.inOutMode} for PIN ${log.userPin}`);
+  }
+
   const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee Checkin`;
 
-  console.log(`[erpnext] Syncing: tenant=${tenant.slug}, pin=${log.userPin}, type=${logType}, endpoint=${endpoint}`);
+  // Build ERPNext Employee Checkin payload
+  // Reference: https://github.com/frappe/hrms/blob/develop/hrms/hr/doctype/employee_checkin/employee_checkin.json
+  const payload = {
+    employee: mapping.erpnextEmployeeId,
+    log_type: logType,
+    time: log.punchedAt.toISOString(),
+    device_id: log.deviceSn || undefined,
+    skip_auto_attendance: 0, // Let ERPNext auto-create attendance
+  };
+
+  console.log(`[erpnext] 🔄 Syncing Employee Checkin:`);
+  console.log(`  Tenant: ${tenant.slug}`);
+  console.log(`  Employee: ${mapping.erpnextEmployeeId} (PIN: ${log.userPin})`);
+  console.log(`  Type: ${logType}`);
+  console.log(`  Time: ${log.punchedAt.toISOString()}`);
+  console.log(`  Device: ${log.deviceSn}`);
+  console.log(`  Endpoint: ${endpoint}`);
+  console.log(`  Payload:`, JSON.stringify(payload, null, 2));
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `token ${apiKey}:${apiSecret}`,
+      "Authorization": `token ${apiKey}:${apiSecret}`,
     },
-    body: JSON.stringify({
-      employee: mapping.erpnextEmployeeId,
-      time: log.punchedAt.toISOString(),
-      log_type: logType,
-      device_id: log.deviceSn,
-    }),
+    body: JSON.stringify(payload),
   });
 
+  const responseText = await response.text();
+  
+  console.log(`[erpnext] 📥 Response:`);
+  console.log(`  Status: ${response.status} ${response.statusText}`);
+  console.log(`  Body:`, responseText);
+
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`ERPNext API error ${response.status}: ${text}`);
+    throw new Error(`ERPNext API error ${response.status}: ${responseText}`);
   }
 
-  const data = (await response.json()) as { data?: { name?: string } };
+  let data: { data?: { name?: string } };
+  try {
+    data = JSON.parse(responseText) as { data?: { name?: string } };
+  } catch {
+    throw new Error(`Invalid JSON response from ERPNext: ${responseText}`);
+  }
+
   const checkinId = data?.data?.name;
 
   if (checkinId) {
@@ -125,7 +154,12 @@ async function syncAttendanceToErpnext(
       where: { id: log.id },
       data: { erpnextCheckinId: checkinId },
     });
-    console.log(`[erpnext] Checkin created: tenant=${tenant.slug}, checkinId=${checkinId}`);
+    console.log(`[erpnext] ✅ Employee Checkin created successfully!`);
+    console.log(`  Checkin ID: ${checkinId}`);
+    console.log(`  Employee: ${mapping.erpnextEmployeeId}`);
+    console.log(`  Type: ${logType}`);
+  } else {
+    console.warn(`[erpnext] ⚠️ No checkin ID returned in response`);
   }
 }
 

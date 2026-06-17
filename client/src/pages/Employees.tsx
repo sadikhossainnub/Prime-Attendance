@@ -68,6 +68,8 @@ export const Employees = () => {
     setEmployeeName(employee.employeeName);
     setErpnextEmployeeId(employee.erpnextEmployeeId || "");
     setEditingId(employee.userPin);
+    // Scroll to form
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const onSubmit = async (e: React.FormEvent) => {
