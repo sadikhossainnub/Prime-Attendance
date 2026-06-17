@@ -125,6 +125,26 @@ export const portalApi = {
   attendance: (params: URLSearchParams) =>
     apiFetch<AttendanceResponse>(`/api/portal/attendance?${params}`),
   syncRetry: () => apiFetch<{ message: string; count: number }>("/api/portal/sync-retry", { method: "POST" }),
+  syncStatus: () =>
+    apiFetch<{
+      totalLogs: number;
+      synced: number;
+      pending: number;
+      failed: number;
+      skipped: number;
+      recentLogs: Array<{
+        id: string;
+        userPin: string;
+        employeeName: string | null;
+        punchedAt: string;
+        deviceSn: string;
+        inOutMode: number | null;
+        syncStatus: string;
+        erpnextCheckinId: string | null;
+        syncError: string | null;
+        syncedAt: string | null;
+      }>;
+    }>("/api/portal/sync-status"),
   rawEvents: (limit?: number) => apiFetch<DeviceRawEvent[]>(`/api/portal/raw-events?limit=${limit ?? 50}`),
   deviceUsers: () => apiFetch<{
     devices: Array<{

@@ -102,12 +102,24 @@ async function syncAttendanceToErpnext(
 
   const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee Checkin`;
 
+  // Format time properly for ERPNext - remove timezone info
+  // ERPNext needs "YYYY-MM-DD HH:mm:ss" format without timezone
+  // The server's timezone setting will be applied by ERPNext
+  const date = new Date(log.punchedAt);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  
   // Build ERPNext Employee Checkin payload
   // Reference: https://github.com/frappe/hrms/blob/develop/hrms/hr/doctype/employee_checkin/employee_checkin.json
   const payload = {
     employee: mapping.erpnextEmployeeId,
     log_type: logType,
-    time: log.punchedAt.toISOString(),
+    time: formattedTime,
     device_id: log.deviceSn || undefined,
     skip_auto_attendance: 0, // Let ERPNext auto-create attendance
   };

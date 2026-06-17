@@ -737,6 +737,68 @@ portalRouter.post("/sync-retry", async (req: AuthRequest, res: Response) => {
   }
 });
 
+portalRouter.get("/sync-status", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+
+    // Get sync status counts
+    const [totalLogs, synced, pending, failed, skipped] = await Promise.all([
+      prisma.attendanceLog.count({ where: { tenantId: tid } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "SYNCED" } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "PENDING" } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "FAILED" } }),
+      prisma.attendanceLog.count({ where: { tenantId: tid, syncStatus: "SKIPPED" } }),
+    ]);
+
+    // Get recent logs with employee names
+    const recentLogs = await prisma.attendanceLog.findMany({
+      where: { tenantId: tid },
+      orderBy: { punchedAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        userPin: true,
+        punchedAt: true,
+        deviceSn: true,
+        inOutMode: true,
+        syncStatus: true,
+        erpnextCheckinId: true,
+        syncError: true,
+        syncedAt: true,
+      },
+    });
+
+    // Fetch employee names
+    const uniquePins = [...new Set(recentLogs.map(log => log.userPin))];
+    const employeeMappings = await prisma.employeeMapping.findMany({
+      where: {
+        tenantId: tid,
+        userPin: { in: uniquePins },
+      },
+      select: { userPin: true, employeeName: true },
+    });
+
+    const employeeMap = new Map(employeeMappings.map(m => [m.userPin, m.employeeName]));
+
+    const enrichedLogs = recentLogs.map(log => ({
+      ...log,
+      employeeName: employeeMap.get(log.userPin) ?? null,
+    }));
+
+    res.json({
+      totalLogs,
+      synced,
+      pending,
+      failed,
+      skipped,
+      recentLogs: enrichedLogs,
+    });
+  } catch (err) {
+    console.error("Sync status error:", err);
+    res.status(500).json({ error: "Failed to load sync status" });
+  }
+});
+
 /**
  * Create a new user on a device
  * Sends user data to device in iClock protocol format
