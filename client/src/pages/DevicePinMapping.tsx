@@ -4,13 +4,15 @@ import { portalApi } from "../lib/api";
 
 interface Device {
   serialNumber: string;
-  name: string;
-  online: boolean;
+  name: string | null;
+  online?: boolean;
 }
 
 interface EmployeeMapping {
+  id: string;
+  userPin: string;
   employeeName: string;
-  erpnextEmployeeId?: string;
+  erpnextEmployeeId?: string | null;
 }
 
 interface DevicePinMapping {
@@ -27,6 +29,7 @@ interface DevicePinMapping {
 export default function DevicePinMapping() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [mappings, setMappings] = useState<DevicePinMapping[]>([]);
+  const [employees, setEmployees] = useState<EmployeeMapping[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -36,6 +39,7 @@ export default function DevicePinMapping() {
   const [formData, setFormData] = useState({
     userPin: "",
     employeeName: "",
+    selectedEmployeePin: "",
     privilege: 0,
     createEmployeeMapping: true,
   });
@@ -56,13 +60,15 @@ export default function DevicePinMapping() {
       setLoading(true);
       setError(null);
       
-      const [devicesRes, mappingsRes] = await Promise.all([
+      const [devicesRes, mappingsRes, employeesRes] = await Promise.all([
         portalApi.devices(),
         portalApi.deviceMappings(),
+        portalApi.mappings(), // Load existing employees
       ]);
 
       setDevices(Array.isArray(devicesRes) ? devicesRes : []);
       setMappings(Array.isArray(mappingsRes) ? mappingsRes : []);
+      setEmployees(Array.isArray(employeesRes) ? employeesRes : []);
     } catch (err) {
       console.error("Failed to load data:", err);
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -76,6 +82,7 @@ export default function DevicePinMapping() {
     setFormData({
       userPin: "",
       employeeName: "",
+      selectedEmployeePin: "",
       privilege: 0,
       createEmployeeMapping: true,
     });
@@ -83,7 +90,20 @@ export default function DevicePinMapping() {
     setShowAddModal(true);
   };
 
-  const handleAddMapping = async (e: React.FormEvent) => {
+  const handleEmployeeSelect = (employeePin: string) => {
+    const employee = employees.find(e => e.userPin === employeePin);
+    if (employee) {
+      setFormData({
+        ...formData,
+        selectedEmployeePin: employeePin,
+        userPin: employee.userPin,
+        employeeName: employee.employeeName,
+        createEmployeeMapping: false, // Already exists
+      });
+    }
+  };
+
+  const handleAddMapping = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (!selectedDevice) {
@@ -395,6 +415,29 @@ export default function DevicePinMapping() {
                 </div>
               </div>
 
+              {/* Employee Selection */}
+              <div>
+                <label className="block text-sm text-slate-400 mb-2">
+                  Select Existing Employee (Optional)
+                </label>
+                <select
+                  value={formData.selectedEmployeePin}
+                  onChange={(e) => handleEmployeeSelect(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white"
+                >
+                  <option value="">-- Select Employee or Enter New --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.userPin}>
+                      {emp.employeeName} (PIN: {emp.userPin})
+                      {emp.erpnextEmployeeId && ` - ${emp.erpnextEmployeeId}`}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">
+                  অথবা নিচে নতুন employee তথ্য দিন
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm text-slate-400 mb-2">
                   PIN (Numeric) *
@@ -404,7 +447,7 @@ export default function DevicePinMapping() {
                   placeholder="e.g., 101"
                   value={formData.userPin}
                   onChange={(e) =>
-                    setFormData({ ...formData, userPin: e.target.value })
+                    setFormData({ ...formData, userPin: e.target.value, selectedEmployeePin: "" })
                   }
                   className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm text-white placeholder-slate-500"
                   required

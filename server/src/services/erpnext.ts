@@ -1,5 +1,10 @@
 import type { AttendanceLog } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
+import {
+  checkDuplicateCheckin,
+  verifyEmployeeShiftAssignment,
+  verifyAttendanceCreated,
+} from "./shiftSync.js";
 
 /**
  * ERPNext sync service — Tenant-level integration.
@@ -133,7 +138,26 @@ async function syncAttendanceToErpnext(
   } else if (log.inOutMode === 1) {
     logType = "OUT";
   } else {
-    throw new Error(`Invalid inOutMode "${log.inOutMode}" for PIN ${log.userPin}. Expected 0 (IN) or 1 (OUT).`);
+    // If inOutMode is null or invalid, try to infer from recent punches
+    const lastPunch = await prisma.attendanceLog.findFirst({
+      where: {
+        tenantId: log.tenantId,
+        userPin: log.userPin,
+        punchedAt: { lt: log.punchedAt },
+        inOutMode: { in: [0, 1] },
+        syncStatus: "SYNCED",
+      },
+      orderBy: { punchedAt: "desc" },
+    });
+
+    // Toggle: if last was IN, this should be OUT
+    if (lastPunch?.inOutMode === 0) {
+      logType = "OUT";
+      console.log(`[erpnext] ⚠️ inOutMode was null, inferred as OUT (last punch was IN)`);
+    } else {
+      logType = "IN";
+      console.log(`[erpnext] ⚠️ inOutMode was null, inferred as IN (default or last was OUT)`);
+    }
   }
 
   const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee Checkin`;
@@ -149,15 +173,53 @@ async function syncAttendanceToErpnext(
   const minutes = String(date.getMinutes()).padStart(2, '0');
   const seconds = String(date.getSeconds()).padStart(2, '0');
   const formattedTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+
+  // Check for duplicate checkin in ERPNext
+  console.log(`[erpnext] 🔍 Checking for duplicate checkin in ERPNext...`);
+  const existingCheckinId = await checkDuplicateCheckin(
+    log.tenantId,
+    mapping.erpnextEmployeeId,
+    formattedTime
+  );
+
+  if (existingCheckinId) {
+    console.log(`[erpnext] ⚠️ Duplicate checkin found: ${existingCheckinId}, skipping sync`);
+    await prisma.attendanceLog.update({
+      where: { id: log.id },
+      data: {
+        syncStatus: "SKIPPED",
+        erpnextCheckinId: existingCheckinId,
+        syncError: "Duplicate checkin already exists in ERPNext",
+      },
+    });
+    return;
+  }
+
+  // Verify employee has shift assignment (warning only, not blocking)
+  console.log(`[erpnext] 🔍 Verifying employee shift assignment...`);
+  const shiftCheck = await verifyEmployeeShiftAssignment(
+    log.tenantId,
+    mapping.erpnextEmployeeId,
+    log.punchedAt
+  );
+
+  if (!shiftCheck.hasShift) {
+    console.warn(`[erpnext] ⚠️ ${shiftCheck.message}`);
+    console.warn(`[erpnext] ⚠️ Attendance may not be auto-created without shift assignment`);
+  } else {
+    console.log(`[erpnext] ✅ ${shiftCheck.message}`);
+  }
   
   // Build ERPNext Employee Checkin payload
   // Reference: https://github.com/frappe/hrms/blob/develop/hrms/hr/doctype/employee_checkin/employee_checkin.json
+  // ERPNext will automatically mark attendance based on shift configuration
   const payload = {
+    doctype: "Employee Checkin",
     employee: mapping.erpnextEmployeeId,
     log_type: logType, // Must be "IN" or "OUT" exactly
     time: formattedTime,
     device_id: log.deviceSn || undefined,
-    skip_auto_attendance: 0, // Let ERPNext auto-create attendance
+    skip_auto_attendance: 0, // 0 = Let ERPNext auto-create attendance from shift rules
   };
 
   console.log(`[erpnext] 🔄 Syncing Employee Checkin:`);
@@ -166,6 +228,7 @@ async function syncAttendanceToErpnext(
   console.log(`  ⚠️  RAW inOutMode from DB: ${log.inOutMode}`);
   console.log(`  ✅ Mapped log_type: ${logType}`);
   console.log(`  Time: ${log.punchedAt.toISOString()}`);
+  console.log(`  Formatted Time: ${formattedTime}`);
   console.log(`  Device: ${log.deviceSn}`);
   console.log(`  Endpoint: ${endpoint}`);
   console.log(`  Payload:`, JSON.stringify(payload, null, 2));
@@ -207,6 +270,25 @@ async function syncAttendanceToErpnext(
     console.log(`  Checkin ID: ${checkinId}`);
     console.log(`  Employee: ${mapping.erpnextEmployeeId}`);
     console.log(`  Type: ${logType}`);
+
+    // Verify attendance creation (async, non-blocking)
+    setTimeout(async () => {
+      try {
+        const attendanceCheck = await verifyAttendanceCreated(
+          log.tenantId,
+          mapping.erpnextEmployeeId,
+          log.punchedAt
+        );
+        console.log(`[erpnext] 📊 Attendance verification: ${attendanceCheck.message}`);
+        if (attendanceCheck.attendance) {
+          console.log(`  Status: ${attendanceCheck.attendance.status}`);
+          console.log(`  In Time: ${attendanceCheck.attendance.in_time || "N/A"}`);
+          console.log(`  Out Time: ${attendanceCheck.attendance.out_time || "N/A"}`);
+        }
+      } catch (err) {
+        console.warn(`[erpnext] Could not verify attendance: ${err}`);
+      }
+    }, 5000); // Wait 5 seconds before checking
   } else {
     console.warn(`[erpnext] ⚠️ No checkin ID returned in response`);
   }

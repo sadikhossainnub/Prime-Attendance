@@ -65,17 +65,36 @@ model Tenant {
   createdAt         DateTime     @default(now()) @map("created_at")
   updatedAt         DateTime     @updatedAt @map("updated_at")
 
-  users            User[]
-  devices          Device[]
-  attendanceLogs   AttendanceLog[]
-  employeeMappings EmployeeMapping[]
-  rawEvents        DeviceRawEvent[]
-  payments         Payment[]
-  subscriptions    Subscription[]
-  invoices         Invoice[]
-  deviceUsers      DeviceUser[]
+  users                User[]
+  devices              Device[]
+  attendanceLogs       AttendanceLog[]
+  employeeMappings     EmployeeMapping[]
+  rawEvents            DeviceRawEvent[]
+  payments             Payment[]
+  subscriptions        Subscription[]
+  invoices             Invoice[]
+  deviceUsers          DeviceUser[]
   subscriptionPackages SubscriptionPackage[]
-  serviceUsages    TenantServiceUsage[]
+  serviceUsages        TenantServiceUsage[]
+  
+  // HRMS Relations
+  leaveTypes           LeaveType[]
+  leavePeriods         LeavePeriod[]
+  leaveAllocations     LeaveAllocation[]
+  leaveApplications    LeaveApplication[]
+  holidayLists         HolidayList[]
+  shiftTypes           ShiftType[]
+  shiftAssignments     ShiftAssignment[]
+  attendanceRequests   AttendanceRequest[]
+  departments          Department[]
+  designations         Designation[]
+  branches             Branch[]
+  employmentTypes      EmploymentType[]
+  employeeGrades       EmployeeGrade[]
+  salaryComponents     SalaryComponent[]
+  salaryStructures     SalaryStructure[]
+  salaryStructureAssignments SalaryStructureAssignment[]
+  salarySlips          SalarySlip[]
 
   @@map("tenants")
 }
@@ -175,16 +194,16 @@ model EmployeeMapping {
 }
 
 model DeviceUser {
-  id            String   @id @default(cuid())
-  tenantId      String   @map("tenant_id")
-  deviceSn      String   @map("device_sn")
-  userPin       String   @map("user_pin")
-  userName      String?  @map("user_name")
-  privilege     Int?     // 0=User, 1=Manager, 2=Admin
-  enabled       Boolean  @default(true)
-  lastSyncedAt  DateTime @map("last_synced_at")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  deviceSn      String    @map("device_sn")
+  userPin       String    @map("user_pin")
+  userName      String?   @map("user_name")
+  privilege     Int?      // 0=User, 1=Manager, 2=Admin
+  enabled       Boolean   @default(true)
+  lastSyncedAt  DateTime? @map("last_synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

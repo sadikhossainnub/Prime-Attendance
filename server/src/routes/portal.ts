@@ -14,6 +14,15 @@ import {
   fetchEmployeeFromErpnext,
   type ErpnextEmployeeDetails
 } from "../services/erpnext.js";
+import {
+  fetchShiftTypesFromErpnext,
+  fetchEmployeeShiftAssignments,
+  verifyShiftConfiguration,
+  verifyEmployeeShiftAssignment,
+  fetchAttendanceFromErpnext,
+  verifyAttendanceCreated,
+  markAttendanceInErpnext,
+} from "../services/shiftSync.js";
 
 export const portalRouter = Router();
 portalRouter.use(requireAuth, requireTenantUser);
@@ -1003,7 +1012,7 @@ portalRouter.post("/devices/:sn/users", async (req: AuthRequest, res: Response) 
       return;
     }
 
-    // Create user record in database
+    // Create user record in database with lastSyncedAt=null (pending sync to device)
     const deviceUser = await prisma.deviceUser.create({
       data: {
         tenantId: tid,
@@ -1012,7 +1021,7 @@ portalRouter.post("/devices/:sn/users", async (req: AuthRequest, res: Response) 
         userName,
         privilege: privLevel,
         enabled: true,
-        lastSyncedAt: new Date(),
+        lastSyncedAt: null, // Will be set when device syncs
       },
     });
 
@@ -1190,5 +1199,287 @@ portalRouter.delete("/device-mappings/:deviceSn/:userPin", async (req: AuthReque
   } catch (err) {
     console.error("Delete device mapping error:", err);
     res.status(404).json({ error: "Mapping not found" });
+  }
+});
+
+
+// ===================================
+// Shift Management & Verification
+// ===================================
+
+/**
+ * GET /api/portal/shift-types
+ * Fetch all shift types from ERPNext
+ */
+portalRouter.get("/shift-types", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const shiftTypes = await fetchShiftTypesFromErpnext(tid);
+    res.json({ shiftTypes });
+  } catch (err) {
+    console.error("Shift types fetch error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch shift types";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/portal/shift-types/:shiftTypeName/verify
+ * Verify shift type configuration for auto-attendance
+ */
+portalRouter.get("/shift-types/:shiftTypeName/verify", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { shiftTypeName } = req.params;
+    const verification = await verifyShiftConfiguration(tid, shiftTypeName);
+    res.json(verification);
+  } catch (err) {
+    console.error("Shift verification error:", err);
+    const message = err instanceof Error ? err.message : "Failed to verify shift configuration";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/portal/employees/:employeeId/shift-assignments
+ * Fetch shift assignments for an employee
+ */
+portalRouter.get("/employees/:employeeId/shift-assignments", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { employeeId } = req.params;
+    const assignments = await fetchEmployeeShiftAssignments(tid, employeeId);
+    res.json({ assignments });
+  } catch (err) {
+    console.error("Shift assignments fetch error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch shift assignments";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/portal/employees/:employeeId/verify-shift
+ * Verify if employee has active shift assignment for a date
+ */
+portalRouter.post("/employees/:employeeId/verify-shift", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { employeeId } = req.params;
+    const { date } = req.body as { date?: string };
+
+    if (!date) {
+      res.status(400).json({ error: "Date parameter required (YYYY-MM-DD)" });
+      return;
+    }
+
+    const verification = await verifyEmployeeShiftAssignment(tid, employeeId, new Date(date));
+    res.json(verification);
+  } catch (err) {
+    console.error("Employee shift verification error:", err);
+    const message = err instanceof Error ? err.message : "Failed to verify employee shift assignment";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/portal/attendance/:employeeId/:date
+ * Fetch attendance record from ERPNext
+ */
+portalRouter.get("/attendance/:employeeId/:date", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { employeeId, date } = req.params;
+
+    const attendance = await fetchAttendanceFromErpnext(tid, employeeId, date);
+
+    if (!attendance) {
+      res.status(404).json({ error: "Attendance not found" });
+      return;
+    }
+
+    res.json({ attendance });
+  } catch (err) {
+    console.error("Attendance fetch error:", err);
+    const message = err instanceof Error ? err.message : "Failed to fetch attendance";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/portal/attendance/verify
+ * Verify if attendance was created for a checkin
+ */
+portalRouter.post("/attendance/verify", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { employeeId, checkinDate } = req.body as {
+      employeeId?: string;
+      checkinDate?: string;
+    };
+
+    if (!employeeId || !checkinDate) {
+      res.status(400).json({ error: "employeeId and checkinDate required" });
+      return;
+    }
+
+    const verification = await verifyAttendanceCreated(tid, employeeId, new Date(checkinDate));
+    res.json(verification);
+  } catch (err) {
+    console.error("Attendance verification error:", err);
+    const message = err instanceof Error ? err.message : "Failed to verify attendance";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * POST /api/portal/attendance/mark
+ * Manually mark attendance in ERPNext
+ */
+portalRouter.post("/attendance/mark", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { employeeId, date, status, inTime, outTime } = req.body as {
+      employeeId?: string;
+      date?: string;
+      status?: "Present" | "Absent" | "Half Day" | "On Leave" | "Work From Home";
+      inTime?: string;
+      outTime?: string;
+    };
+
+    if (!employeeId || !date || !status) {
+      res.status(400).json({ error: "employeeId, date, and status required" });
+      return;
+    }
+
+    const validStatuses = ["Present", "Absent", "Half Day", "On Leave", "Work From Home"];
+    if (!validStatuses.includes(status)) {
+      res.status(400).json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` });
+      return;
+    }
+
+    const result = await markAttendanceInErpnext(tid, employeeId, date, status, inTime, outTime);
+
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: "Attendance marked successfully",
+      attendanceId: result.attendanceId,
+    });
+  } catch (err) {
+    console.error("Manual attendance marking error:", err);
+    const message = err instanceof Error ? err.message : "Failed to mark attendance";
+    res.status(500).json({ error: message });
+  }
+});
+
+/**
+ * GET /api/portal/attendance-verification-report
+ * Get comprehensive verification report for attendance
+ */
+portalRouter.get("/attendance-verification-report", async (req: AuthRequest, res: Response) => {
+  try {
+    const tid = tenantId(req);
+    const { fromDate, toDate } = req.query as { fromDate?: string; toDate?: string };
+
+    if (!fromDate || !toDate) {
+      res.status(400).json({ error: "fromDate and toDate query parameters required (YYYY-MM-DD)" });
+      return;
+    }
+
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+
+    // Fetch all synced checkins in date range
+    const checkins = await prisma.attendanceLog.findMany({
+      where: {
+        tenantId: tid,
+        syncStatus: "SYNCED",
+        punchedAt: { gte: from, lte: to },
+      },
+      orderBy: { punchedAt: "asc" },
+    });
+
+    // Get employee mappings
+    const mappings = await prisma.employeeMapping.findMany({
+      where: { tenantId: tid },
+    });
+
+    const mappingMap = new Map(mappings.map((m) => [m.userPin, m.erpnextEmployeeId]));
+
+    // Group by employee and date
+    const report: Array<{
+      employeeId: string;
+      employeeName: string;
+      date: string;
+      checkinCount: number;
+      attendanceCreated: boolean;
+      attendanceStatus?: string;
+      issues: string[];
+    }> = [];
+
+    const groupedByEmployeeDate = new Map<string, typeof checkins>();
+
+    for (const checkin of checkins) {
+      const employeeId = mappingMap.get(checkin.userPin);
+      if (!employeeId) continue;
+
+      const dateStr = checkin.punchedAt.toISOString().split("T")[0];
+      const key = `${employeeId}-${dateStr}`;
+
+      if (!groupedByEmployeeDate.has(key)) {
+        groupedByEmployeeDate.set(key, []);
+      }
+      groupedByEmployeeDate.get(key)!.push(checkin);
+    }
+
+    // Check attendance for each group
+    for (const [key, checkinsForDay] of groupedByEmployeeDate) {
+      const [employeeId, dateStr] = key.split("-");
+      const mapping = mappings.find((m) => m.erpnextEmployeeId === employeeId);
+
+      if (!employeeId || !dateStr) continue;
+
+      const issues: string[] = [];
+
+      try {
+        const attendance = await fetchAttendanceFromErpnext(tid, employeeId, dateStr);
+
+        report.push({
+          employeeId,
+          employeeName: mapping?.employeeName || "Unknown",
+          date: dateStr,
+          checkinCount: checkinsForDay.length,
+          attendanceCreated: !!attendance,
+          attendanceStatus: attendance?.status,
+          issues: attendance ? [] : ["Attendance not created despite successful checkin sync"],
+        });
+      } catch (err) {
+        report.push({
+          employeeId,
+          employeeName: mapping?.employeeName || "Unknown",
+          date: dateStr,
+          checkinCount: checkinsForDay.length,
+          attendanceCreated: false,
+          issues: [`Error checking attendance: ${err}`],
+        });
+      }
+    }
+
+    const summary = {
+      totalDays: report.length,
+      attendanceCreated: report.filter((r) => r.attendanceCreated).length,
+      attendanceMissing: report.filter((r) => !r.attendanceCreated).length,
+      withIssues: report.filter((r) => r.issues.length > 0).length,
+    };
+
+    res.json({ summary, report });
+  } catch (err) {
+    console.error("Attendance verification report error:", err);
+    const message = err instanceof Error ? err.message : "Failed to generate verification report";
+    res.status(500).json({ error: message });
   }
 });
