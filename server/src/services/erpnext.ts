@@ -126,10 +126,14 @@ async function syncAttendanceToErpnext(
 
   // Determine log type (IN/OUT)
   // inOutMode: 0 = IN, 1 = OUT, null = unknown
-  const logType = log.inOutMode === 1 ? "OUT" : log.inOutMode === 0 ? "IN" : null;
+  let logType: "IN" | "OUT";
   
-  if (!logType) {
-    throw new Error(`Invalid inOutMode ${log.inOutMode} for PIN ${log.userPin}`);
+  if (log.inOutMode === 0) {
+    logType = "IN";
+  } else if (log.inOutMode === 1) {
+    logType = "OUT";
+  } else {
+    throw new Error(`Invalid inOutMode "${log.inOutMode}" for PIN ${log.userPin}. Expected 0 (IN) or 1 (OUT).`);
   }
 
   const endpoint = `${url.replace(/\/$/, "")}/api/resource/Employee Checkin`;
@@ -150,7 +154,7 @@ async function syncAttendanceToErpnext(
   // Reference: https://github.com/frappe/hrms/blob/develop/hrms/hr/doctype/employee_checkin/employee_checkin.json
   const payload = {
     employee: mapping.erpnextEmployeeId,
-    log_type: logType,
+    log_type: logType, // Must be "IN" or "OUT" exactly
     time: formattedTime,
     device_id: log.deviceSn || undefined,
     skip_auto_attendance: 0, // Let ERPNext auto-create attendance
@@ -159,7 +163,8 @@ async function syncAttendanceToErpnext(
   console.log(`[erpnext] 🔄 Syncing Employee Checkin:`);
   console.log(`  Tenant: ${tenant.slug}`);
   console.log(`  Employee: ${mapping.erpnextEmployeeId} (PIN: ${log.userPin})`);
-  console.log(`  Type: ${logType}`);
+  console.log(`  ⚠️  RAW inOutMode from DB: ${log.inOutMode}`);
+  console.log(`  ✅ Mapped log_type: ${logType}`);
   console.log(`  Time: ${log.punchedAt.toISOString()}`);
   console.log(`  Device: ${log.deviceSn}`);
   console.log(`  Endpoint: ${endpoint}`);
