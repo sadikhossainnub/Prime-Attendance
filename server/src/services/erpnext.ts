@@ -178,7 +178,7 @@ async function syncAttendanceToErpnext(
   console.log(`[erpnext] 🔍 Checking for duplicate checkin in ERPNext...`);
   const existingCheckinId = await checkDuplicateCheckin(
     log.tenantId,
-    mapping.erpnextEmployeeId,
+    mapping.erpnextEmployeeId!, // Safe: already checked above
     formattedTime
   );
 
@@ -199,7 +199,7 @@ async function syncAttendanceToErpnext(
   console.log(`[erpnext] 🔍 Verifying employee shift assignment...`);
   const shiftCheck = await verifyEmployeeShiftAssignment(
     log.tenantId,
-    mapping.erpnextEmployeeId,
+    mapping.erpnextEmployeeId!, // Safe: already checked above
     log.punchedAt
   );
 
@@ -215,7 +215,7 @@ async function syncAttendanceToErpnext(
   // ERPNext will automatically mark attendance based on shift configuration
   const payload = {
     doctype: "Employee Checkin",
-    employee: mapping.erpnextEmployeeId,
+    employee: mapping.erpnextEmployeeId!, // Safe: already checked above
     log_type: logType, // Must be "IN" or "OUT" exactly
     time: formattedTime,
     device_id: log.deviceSn || undefined,
@@ -272,23 +272,25 @@ async function syncAttendanceToErpnext(
     console.log(`  Type: ${logType}`);
 
     // Verify attendance creation (async, non-blocking)
-    setTimeout(async () => {
-      try {
-        const attendanceCheck = await verifyAttendanceCreated(
-          log.tenantId,
-          mapping.erpnextEmployeeId,
-          log.punchedAt
-        );
-        console.log(`[erpnext] 📊 Attendance verification: ${attendanceCheck.message}`);
-        if (attendanceCheck.attendance) {
-          console.log(`  Status: ${attendanceCheck.attendance.status}`);
-          console.log(`  In Time: ${attendanceCheck.attendance.in_time || "N/A"}`);
-          console.log(`  Out Time: ${attendanceCheck.attendance.out_time || "N/A"}`);
+    if (mapping.erpnextEmployeeId) {
+      setTimeout(async () => {
+        try {
+          const attendanceCheck = await verifyAttendanceCreated(
+            log.tenantId,
+            mapping.erpnextEmployeeId!,
+            log.punchedAt
+          );
+          console.log(`[erpnext] 📊 Attendance verification: ${attendanceCheck.message}`);
+          if (attendanceCheck.attendance) {
+            console.log(`  Status: ${attendanceCheck.attendance.status}`);
+            console.log(`  In Time: ${attendanceCheck.attendance.in_time || "N/A"}`);
+            console.log(`  Out Time: ${attendanceCheck.attendance.out_time || "N/A"}`);
+          }
+        } catch (err) {
+          console.warn(`[erpnext] Could not verify attendance: ${err}`);
         }
-      } catch (err) {
-        console.warn(`[erpnext] Could not verify attendance: ${err}`);
-      }
-    }, 5000); // Wait 5 seconds before checking
+      }, 5000); // Wait 5 seconds before checking
+    }
   } else {
     console.warn(`[erpnext] ⚠️ No checkin ID returned in response`);
   }
