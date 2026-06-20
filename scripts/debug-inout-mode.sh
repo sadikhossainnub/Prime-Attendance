@@ -12,23 +12,68 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Database connection via Docker
-CONTAINER_NAME="prime-attendance-db-1"
+# Try to find the correct container name
+# Common patterns: postgres, db, prime-attendance-postgres, etc.
+CONTAINER_NAME=""
 
-# Check if container is running
-if ! docker ps | grep -q "$CONTAINER_NAME"; then
-    echo "❌ Database container not running"
+# Method 1: Check docker-compose service name
+if docker compose ps postgres &> /dev/null; then
+    CONTAINER_NAME=$(docker compose ps postgres -q | head -1)
+    if [ -n "$CONTAINER_NAME" ]; then
+        CONTAINER_NAME=$(docker ps --filter "id=$CONTAINER_NAME" --format "{{.Names}}")
+        echo "✅ Found container via docker compose: $CONTAINER_NAME"
+    fi
+fi
+
+# Method 2: Search by postgres image
+if [ -z "$CONTAINER_NAME" ]; then
+    CONTAINER_NAME=$(docker ps --filter "ancestor=postgres:16-alpine" --format "{{.Names}}" | head -1)
+    if [ -n "$CONTAINER_NAME" ]; then
+        echo "✅ Found postgres:16-alpine container: $CONTAINER_NAME"
+    fi
+fi
+
+# Method 3: Search by any postgres
+if [ -z "$CONTAINER_NAME" ]; then
+    CONTAINER_NAME=$(docker ps | grep postgres | awk '{print $NF}' | head -1)
+    if [ -n "$CONTAINER_NAME" ]; then
+        echo "✅ Found postgres container: $CONTAINER_NAME"
+    fi
+fi
+
+# Method 4: Check by service name pattern
+if [ -z "$CONTAINER_NAME" ]; then
+    CONTAINER_NAME=$(docker ps --format "{{.Names}}" | grep -E "postgres|db" | head -1)
+    if [ -n "$CONTAINER_NAME" ]; then
+        echo "✅ Found container by name pattern: $CONTAINER_NAME"
+    fi
+fi
+
+if [ -z "$CONTAINER_NAME" ]; then
+    echo "❌ No postgres container found"
+    echo ""
+    echo "Available containers:"
+    docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+    echo ""
     echo "Run: docker compose up -d"
     exit 1
 fi
 
-echo "✅ Database container found"
+# Database credentials from docker-compose.yml
+DB_USER="prime"
+DB_NAME="prime_attendance"
+
+echo ""
+echo "Using:"
+echo "  Container: $CONTAINER_NAME"
+echo "  Database: $DB_NAME"
+echo "  User: $DB_USER"
 echo ""
 
 # Query 1: Check inOutMode distribution
 echo "📊 Query 1: inOutMode Distribution"
 echo "-----------------------------------"
-docker exec -it $CONTAINER_NAME psql -U primeattendance -d primeattendance -c "
+docker exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME << 'EOF'
 SELECT 
   CASE 
     WHEN in_out_mode = 0 THEN 'IN (0)'
@@ -41,12 +86,12 @@ SELECT
 FROM attendance_logs
 GROUP BY in_out_mode
 ORDER BY count DESC;
-"
+EOF
 
 echo ""
 echo "📋 Query 2: Recent 20 Punches with inOutMode"
 echo "-----------------------------------"
-docker exec -it $CONTAINER_NAME psql -U primeattendance -d primeattendance -c "
+docker exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME << 'EOF'
 SELECT 
   user_pin,
   punched_at,
@@ -62,12 +107,12 @@ SELECT
 FROM attendance_logs
 ORDER BY punched_at DESC
 LIMIT 20;
-"
+EOF
 
 echo ""
 echo "🔍 Query 3: Check Device Punch Type Configuration"
 echo "-----------------------------------"
-docker exec -it $CONTAINER_NAME psql -U primeattendance -d primeattendance -c "
+docker exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME << 'EOF'
 SELECT 
   sn,
   name,
@@ -81,12 +126,12 @@ SELECT
   punch_type as raw_value
 FROM devices
 ORDER BY created_at DESC;
-"
+EOF
 
 echo ""
 echo "💡 Query 4: Sample Punch Pattern for One Employee"
 echo "-----------------------------------"
-docker exec -it $CONTAINER_NAME psql -U primeattendance -d primeattendance -c "
+docker exec -i $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME << 'EOF'
 WITH sample_pin AS (
   SELECT user_pin 
   FROM attendance_logs 
@@ -107,7 +152,7 @@ FROM attendance_logs a
 WHERE a.user_pin = (SELECT user_pin FROM sample_pin)
 ORDER BY a.punched_at DESC
 LIMIT 15;
-"
+EOF
 
 echo ""
 echo "=============================="
