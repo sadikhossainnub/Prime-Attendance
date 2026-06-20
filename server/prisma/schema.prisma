@@ -399,3 +399,460 @@ model TenantServiceUsage {
   @@index([serviceId])
   @@map("tenant_service_usage")
 }
+
+// =====================================================
+// HRMS: LEAVE MANAGEMENT
+// =====================================================
+
+enum LeaveStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model LeaveType {
+  id                    String   @id @default(cuid())
+  tenantId              String   @map("tenant_id")
+  name                  String
+  maxLeavesAllowed      Float    @default(0) @map("max_leaves_allowed")
+  applicableAfter       Int      @default(0) @map("applicable_after")
+  maxContinuousDays     Int?     @map("max_continuous_days")
+  isCarryForward        Boolean  @default(false) @map("is_carry_forward")
+  maxCarryForwardDays   Float?   @map("max_carry_forward_days")
+  isOptional            Boolean  @default(false) @map("is_optional")
+  allowNegative         Boolean  @default(false) @map("allow_negative")
+  includeHolidays       Boolean  @default(false) @map("include_holidays")
+  isCompensatory        Boolean  @default(false) @map("is_compensatory")
+  isPaidLeave           Boolean  @default(true) @map("is_paid_leave")
+  fractionalGrant       Boolean  @default(false) @map("fractional_grant")
+  encashable            Boolean  @default(false) @map("encashable")
+  earnedLeaveFrequency  String?  @map("earned_leave_frequency")
+  roundingMethod        String   @default("0.5") @map("rounding_method")
+  color                 String?
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+  
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  allocations     LeaveAllocation[]
+  applications    LeaveApplication[]
+  
+  @@unique([tenantId, name])
+  @@map("leave_types")
+}
+
+model LeavePeriod {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  fromDate    DateTime @map("from_date")
+  toDate      DateTime @map("to_date")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  allocations  LeaveAllocation[]
+  
+  @@unique([tenantId, name])
+  @@map("leave_periods")
+}
+
+model LeaveAllocation {
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  employeePin       String   @map("employee_pin")
+  leaveTypeId       String   @map("leave_type_id")
+  leavePeriodId     String?  @map("leave_period_id")
+  fromDate          DateTime @map("from_date")
+  toDate            DateTime @map("to_date")
+  newLeavesAllocated Float   @map("new_leaves_allocated")
+  carriedForward    Float    @default(0) @map("carried_forward")
+  totalLeavesAllocated Float @map("total_leaves_allocated")
+  usedLeaves        Float    @default(0) @map("used_leaves")
+  expiredLeaves     Float    @default(0) @map("expired_leaves")
+  unusedLeaves      Float    @map("unused_leaves")
+  description       String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaveType   LeaveType       @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  leavePeriod LeavePeriod?    @relation(fields: [leavePeriodId], references: [id], onDelete: SetNull)
+  
+  @@index([tenantId, employeePin])
+  @@map("leave_allocations")
+}
+
+model LeaveApplication {
+  id              String      @id @default(cuid())
+  tenantId        String      @map("tenant_id")
+  employeePin     String      @map("employee_pin")
+  leaveTypeId     String      @map("leave_type_id")
+  fromDate        DateTime    @map("from_date")
+  toDate          DateTime    @map("to_date")
+  halfDay         Boolean     @default(false) @map("half_day")
+  halfDayDate     DateTime?   @map("half_day_date")
+  totalDays       Float       @map("total_days")
+  status          LeaveStatus @default(DRAFT)
+  reason          String?
+  leaveApprover   String?     @map("leave_approver")
+  approvedAt      DateTime?   @map("approved_at")
+  rejectionReason String?     @map("rejection_reason")
+  followVia       String?     @map("follow_via")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, employeePin])
+  @@index([status])
+  @@map("leave_applications")
+}
+
+model HolidayList {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  fromDate    DateTime @map("from_date")
+  toDate      DateTime @map("to_date")
+  isDefault   Boolean  @default(false) @map("is_default")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  holidays   Holiday[]
+  shiftTypes ShiftType[]
+  
+  @@unique([tenantId, name])
+  @@map("holiday_lists")
+}
+
+model Holiday {
+  id             String      @id @default(cuid())
+  holidayListId  String      @map("holiday_list_id")
+  date           DateTime
+  description    String
+  isWeekly       Boolean     @default(false) @map("is_weekly")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  
+  holidayList HolidayList @relation(fields: [holidayListId], references: [id], onDelete: Cascade)
+  
+  @@index([holidayListId, date])
+  @@map("holidays")
+}
+
+// =====================================================
+// HRMS: SHIFT MANAGEMENT
+// =====================================================
+
+model ShiftType {
+  id                        String    @id @default(cuid())
+  tenantId                  String    @map("tenant_id")
+  erpnextShiftId            String?   @map("erpnext_shift_id")
+  name                      String
+  startTime                 String    @map("start_time")
+  endTime                   String    @map("end_time")
+  holidayListId             String?   @map("holiday_list_id")
+  enableAutoAttendance      Boolean   @default(false) @map("enable_auto_attendance")
+  determineCheckInOut       Boolean   @default(true) @map("determine_check_in_out")
+  beginCheckInBefore        Int       @default(60) @map("begin_check_in_before")
+  allowCheckOutAfter        Int       @default(60) @map("allow_check_out_after")
+  processAttendanceAfter    DateTime? @map("process_attendance_after")
+  lastSyncOfCheckin         DateTime? @map("last_sync_of_checkin")
+  workingHoursThresholdAbsent Float   @default(0) @map("working_hours_threshold_absent")
+  workingHoursThresholdHalfDay Float  @default(4) @map("working_hours_threshold_half_day")
+  lateEntryGracePeriod      Int       @default(0) @map("late_entry_grace_period")
+  earlyExitGracePeriod      Int       @default(0) @map("early_exit_grace_period")
+  enableEntryGracePeriod    Boolean   @default(false) @map("enable_entry_grace_period")
+  enableExitGracePeriod     Boolean   @default(false) @map("enable_exit_grace_period")
+  color                     String?
+  isActive                  Boolean   @default(true) @map("is_active")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+  
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  holidayList    HolidayList?      @relation(fields: [holidayListId], references: [id], onDelete: SetNull)
+  assignments    ShiftAssignment[]
+  
+  @@unique([tenantId, name])
+  @@map("shift_types")
+}
+
+model ShiftAssignment {
+  id          String    @id @default(cuid())
+  tenantId    String    @map("tenant_id")
+  employeePin String    @map("employee_pin")
+  shiftTypeId String    @map("shift_type_id")
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime? @map("end_date")
+  status      String    @default("Active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  shiftType ShiftType @relation(fields: [shiftTypeId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, employeePin, startDate])
+  @@index([tenantId, employeePin])
+  @@map("shift_assignments")
+}
+
+model AttendanceRequest {
+  id          String          @id @default(cuid())
+  tenantId    String          @map("tenant_id")
+  employeePin String          @map("employee_pin")
+  fromDate    DateTime        @map("from_date")
+  toDate      DateTime        @map("to_date")
+  halfDay     Boolean         @default(false) @map("half_day")
+  reason      String
+  status      LeaveStatus     @default(DRAFT)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@index([tenantId, employeePin])
+  @@map("attendance_requests")
+}
+
+// =====================================================
+// HRMS: ORGANIZATION STRUCTURE
+// =====================================================
+
+model Department {
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  name              String
+  parentDepartment  String?  @map("parent_department")
+  company           String?
+  isGroup           Boolean  @default(false) @map("is_group")
+  disabled          Boolean  @default(false)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("departments")
+}
+
+model Designation {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("designations")
+}
+
+model Branch {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  address     String?
+  city        String?
+  state       String?
+  country     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("branches")
+}
+
+model EmploymentType {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("employment_types")
+}
+
+model EmployeeGrade {
+  id               String   @id @default(cuid())
+  tenantId         String   @map("tenant_id")
+  name             String
+  defaultLeavePolicy String? @map("default_leave_policy")
+  defaultSalaryStructure String? @map("default_salary_structure")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("employee_grades")
+}
+
+// =====================================================
+// HRMS: PAYROLL MANAGEMENT
+// =====================================================
+
+enum ComponentType {
+  EARNING
+  DEDUCTION
+}
+
+enum SalarySlipStatus {
+  DRAFT
+  SUBMITTED
+  CANCELLED
+}
+
+model SalaryComponent {
+  id                    String        @id @default(cuid())
+  tenantId              String        @map("tenant_id")
+  name                  String
+  abbr                  String
+  type                  ComponentType
+  isPayableOnProvisionalSalary Boolean @default(false) @map("is_payable_on_provisional")
+  isFlexibleBenefit     Boolean       @default(false) @map("is_flexible_benefit")
+  dependsOnPaymentDays  Boolean       @default(false) @map("depends_on_payment_days")
+  isTaxApplicable       Boolean       @default(true) @map("is_tax_applicable")
+  deductFullTaxOn       Boolean       @default(false) @map("deduct_full_tax_on")
+  roundingMethod        String        @default("Nearest Whole Number") @map("rounding_method")
+  statisticalComponent  Boolean       @default(false) @map("statistical_component")
+  doNotIncludeInTotal   Boolean       @default(false) @map("do_not_include_in_total")
+  disabled              Boolean       @default(false)
+  formula               String?
+  amountBasedOnFormula  Boolean       @default(false) @map("amount_based_on_formula")
+  condition             String?
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, name])
+  @@map("salary_components")
+}
+
+model SalaryStructure {
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  name              String
+  company           String?
+  letterHead        String?  @map("letter_head")
+  isActive          Boolean  @default(true) @map("is_active")
+  payrollFrequency  String   @default("Monthly") @map("payroll_frequency")
+  hourRate          Float?   @map("hour_rate")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  tenant      Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  details     SalaryDetail[]
+  assignments SalaryStructureAssignment[]
+  
+  @@unique([tenantId, name])
+  @@map("salary_structures")
+}
+
+model SalaryDetail {
+  id                String   @id @default(cuid())
+  salaryStructureId String   @map("salary_structure_id")
+  salaryComponentId String   @map("salary_component_id")
+  type              ComponentType
+  abbr              String
+  formula           String?
+  condition         String?
+  amountBasedOnFormula Boolean @default(false) @map("amount_based_on_formula")
+  amount            Float?
+  dependsOnPaymentDays Boolean @default(false) @map("depends_on_payment_days")
+  createdAt         DateTime @default(now()) @map("created_at")
+  
+  salaryStructure SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+  
+  @@map("salary_details")
+}
+
+model SalaryStructureAssignment {
+  id                String   @id @default(cuid())
+  tenantId          String   @map("tenant_id")
+  employeePin       String   @map("employee_pin")
+  salaryStructureId String   @map("salary_structure_id")
+  fromDate          DateTime @map("from_date")
+  toDate            DateTime? @map("to_date")
+  base              Float?
+  variableSalary    Float?   @map("variable_salary")
+  income            Float?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  salaryStructure SalaryStructure @relation(fields: [salaryStructureId], references: [id], onDelete: Cascade)
+  
+  @@unique([tenantId, employeePin, fromDate])
+  @@index([tenantId, employeePin])
+  @@map("salary_structure_assignments")
+}
+
+model SalarySlip {
+  id                String           @id @default(cuid())
+  tenantId          String           @map("tenant_id")
+  employeePin       String           @map("employee_pin")
+  employeeName      String           @map("employee_name")
+  department        String?
+  designation       String?
+  month             Int
+  year              Int
+  startDate         DateTime         @map("start_date")
+  endDate           DateTime         @map("end_date")
+  paymentDays       Float            @map("payment_days")
+  totalWorkingDays  Float            @map("total_working_days")
+  leaveWithoutPay   Float            @default(0) @map("leave_without_pay")
+  gross             Float
+  totalEarning      Float            @map("total_earning")
+  totalDeduction    Float            @map("total_deduction")
+  netPay            Float            @map("net_pay")
+  roundedTotal      Float            @map("rounded_total")
+  status            SalarySlipStatus @default(DRAFT)
+  postingDate       DateTime?        @map("posting_date")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  earnings  SalarySlipEarning[]
+  deductions SalarySlipDeduction[]
+  
+  @@unique([tenantId, employeePin, month, year])
+  @@index([tenantId, employeePin])
+  @@map("salary_slips")
+}
+
+model SalarySlipEarning {
+  id            String     @id @default(cuid())
+  salarySlipId  String     @map("salary_slip_id")
+  componentId   String     @map("component_id")
+  amount        Float
+  createdAt     DateTime   @default(now()) @map("created_at")
+  
+  salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+  
+  @@map("salary_slip_earnings")
+}
+
+model SalarySlipDeduction {
+  id            String     @id @default(cuid())
+  salarySlipId  String     @map("salary_slip_id")
+  componentId   String     @map("component_id")
+  amount        Float
+  createdAt     DateTime   @default(now()) @map("created_at")
+  
+  salarySlip SalarySlip @relation(fields: [salarySlipId], references: [id], onDelete: Cascade)
+  
+  @@map("salary_slip_deductions")
+}
