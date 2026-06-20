@@ -2,6 +2,30 @@
 
 ZKTeco বায়োমেট্রিক অ্যাটেনডেন্স ডিভাইস থেকে **সরাসরি** পাঞ্চ ডেটা গ্রহণের **প্ল্যাটফর্ম**। প্রতিটি ক্লায়েন্টের আলাদা portal, ডেটা আলাদা (multi-tenant), আপনি super admin হিসেবে সব ক্লায়েন্ট ম্যানেজ করেন।
 
+## 🎉 Recent Updates (June 20, 2026)
+
+### ✅ ERPNext Sync Fixed
+- Fixed "setSuccess is not defined" error in Attendance page
+- Added success notification UI for sync operations
+- All TypeScript compilation errors resolved
+- **Status:** Production ready! ✓
+
+### 🔍 IN/OUT Mode Debugging Added
+- Enhanced logging to track inOutMode values from devices
+- Created automated debug script (`./scripts/debug-inout-mode.sh`)
+- Added comprehensive troubleshooting guides
+- Server now logs every punch with its IN/OUT mode
+
+### 📚 New Documentation
+- `/ERPNEXT_SYNC_TROUBLESHOOTING.md` - Complete sync troubleshooting
+- `/SYNC_FIX_BN.md` - Sync fix summary (Bengali)
+- `/INOUT_MODE_FIX.md` - IN/OUT mode troubleshooting (English)
+- `/INOUT_FIX_BANGLA.md` - IN/OUT mode fix guide (Bengali)
+- `/CHANGELOG.md` - Complete change history
+- `/HRMS_IMPLEMENTATION_PLAN.md` - Full HRMS roadmap
+
+---
+
 ## পোর্টাল
 
 | পোর্টাল | URL | কে ব্যবহার করে |

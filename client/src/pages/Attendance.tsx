@@ -13,6 +13,7 @@ export default function Attendance() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const load = async (pageNum: number = 1) => {
@@ -105,6 +106,13 @@ export default function Attendance() {
         <div className="p-4 rounded-lg bg-red-900/20 border border-red-800 text-red-300 text-sm flex items-start gap-2">
           <span>⚠️</span>
           <div>{error}</div>
+        </div>
+      )}
+
+      {success && (
+        <div className="p-4 rounded-lg bg-green-900/20 border border-green-800 text-green-300 text-sm flex items-start gap-2">
+          <span>✅</span>
+          <div>{success}</div>
         </div>
       )}
 
