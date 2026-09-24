@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: coolify/Dockerfile
+    restart: always
+    ports:
+      - "7788:7788"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - PORT=7788
+      - JWT_SECRET=${JWT_SECRET:-b45034769124ac4e01f3e0b28b044128a0c67d35af909c0fd9abfa9122138a37}
+      - SUPER_ADMIN_EMAIL=${SUPER_ADMIN_EMAIL:-admin@primetechbd.xyz}
+      - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-Admin@12345}
+      - TZ=Asia/Dhaka
+      - CLIENT_DIST_PATH=/app/client/dist
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:7788/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

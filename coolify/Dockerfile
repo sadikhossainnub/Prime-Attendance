@@ -1,3 +1,4 @@
+# Coolify Optimized Dockerfile for Prime Attendance
 FROM node:20-alpine AS client-builder
 WORKDIR /app/client
 COPY client/package*.json ./
@@ -20,20 +21,23 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=7788
 
+# Install openssl for Prisma if required on alpine
 RUN apk add --no-cache openssl wget
 
 COPY server/package*.json ./
 RUN npm ci --omit=dev
 COPY server/prisma ./prisma
 RUN npx prisma generate
+
 COPY --from=server-builder /app/server/dist ./dist
 COPY --from=client-builder /app/client/dist ./client/dist
 
 ENV CLIENT_DIST_PATH=/app/client/dist
+
 EXPOSE 7788
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-7788}/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT}/health || exit 1
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
