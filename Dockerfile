@@ -20,7 +20,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=7788
 
-RUN apk add --no-cache openssl wget
+# Install openssl, wget, and curl for Prisma and Coolify Healthchecks
+RUN apk add --no-cache openssl wget curl
 
 COPY server/package*.json ./
 RUN npm ci --omit=dev
@@ -34,6 +35,6 @@ EXPOSE 7788
 EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-7788}/health || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-7788}/health || curl -f http://127.0.0.1:${PORT:-7788}/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+CMD ["sh", "-c", "if [ -n \"$DATABASE_URL\" ]; then npx prisma migrate deploy; else echo 'WARNING: DATABASE_URL not set!'; fi && node dist/index.js"]
