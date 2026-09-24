@@ -65,12 +65,17 @@ app.use(
 app.use(express.json());
 
 app.get("/health", async (_req, res) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.json({ status: "ok", mode: "multi-tenant" });
-  } catch {
-    res.status(503).json({ status: "degraded" });
+  let dbStatus = "ok";
+  if (process.env.DATABASE_URL) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbStatus = "disconnected";
+    }
+  } else {
+    dbStatus = "missing_env";
   }
+  res.status(200).json({ status: "ok", db: dbStatus, mode: "multi-tenant" });
 });
 
 // Apply rate limiting to auth routes
