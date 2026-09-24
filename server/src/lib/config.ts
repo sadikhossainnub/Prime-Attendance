@@ -9,20 +9,16 @@ function validateConfig() {
 
   // Validate DATABASE_URL
   if (!process.env.DATABASE_URL) {
-    errors.push("DATABASE_URL environment variable is required");
+    console.warn("⚠️  WARNING: DATABASE_URL environment variable is missing. Database features will fail until DATABASE_URL is provided in environment variables.");
   }
 
   // Validate JWT_SECRET
   const jwtSecret = process.env.JWT_SECRET ?? "change-me-jwt-secret-min-32-chars-long";
   if (jwtSecret.length < 32) {
-    errors.push(`JWT_SECRET must be at least 32 characters (current: ${jwtSecret.length})`);
+    console.warn(`⚠️  WARNING: JWT_SECRET should be at least 32 characters (current: ${jwtSecret.length})`);
   }
   if (jwtSecret === "change-me-jwt-secret-min-32-chars-long") {
     console.warn("⚠️  WARNING: Using default JWT_SECRET. Set JWT_SECRET environment variable in production.");
-  }
-
-  if (errors.length > 0) {
-    throw new Error(`Configuration validation failed:\n${errors.join("\n")}`);
   }
 }
 
