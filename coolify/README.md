@@ -1,18 +1,18 @@
 # Coolify Deployment Guide for Prime Attendance & ZKTeco Devices
 
-## 🚀 Coolify-তে সেটআপ করার নিয়ম
+## 🚀 Coolify-তে বিল্ড ও ডিপ্লয়মেন্ট কনফিগারেশন
 
-### ১. Dockerfile Location
-Coolify-তে অ্যাপ কনফিগারেশনে:
-- **Build Pack:** Dockerfile
-- **Dockerfile Location:** `coolify/Dockerfile` (অথবা root `Dockerfile`)
+### ১. General Configuration (বিল্ড ফেইলিউর এড়াতে)
+Coolify Dashboard -> Application Settings:
+- **Build Pack:** `Dockerfile`
+- **Base Directory:** `/` *(অবশ্যই Root Directory `/` রাখবেন, `/coolify` করবেন না!)*
+- **Dockerfile Location:** `/Dockerfile` *(অথবা `/coolify/Dockerfile`)*
 
 ### ২. Port Expose (ZKTeco F18 কানেকশনের জন্য অতি জরুরি)
-Coolify UI-তে:
-- **Port Exposes:** `7788:7788`
-- **Ports Mapping:** `7788:7788`
+Coolify UI -> Ports Exposes:
+- **Ports Exposes:** `7788:7788`
 
-*(ZKTeco F18 ডিভাইস Domain/HTTPS বোঝে না। এটি সরাসরি IP:7788 পোর্টে HTTP মাধ্যমে ডেটা পাঠায়।)*
+*(ZKTeco F18 ডিভাইস Domain/HTTPS বোঝে না। এটি সরাসরি HTTP IP:7788 পোর্টে ডেটা পাঠায়।)*
 
 ### ৩. Environment Variables
 Coolify-এর Environment Variables ট্যাবে নিচের ফিল্ডগুলো সেট করুন:
