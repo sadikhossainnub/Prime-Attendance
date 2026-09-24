@@ -103,18 +103,17 @@ app.get("*", (req, res, next) => {
 async function start() {
   try {
     await seedSuperAdmin();
-    app.listen(config.port, "0.0.0.0", () => {
-      console.log(`Prime Attendance on port ${config.port}`);
-      console.log(`Super admin: ${config.superAdmin.email}`);
-      console.log(`Environment: ${config.nodeEnv}`);
-    });
   } catch (err) {
-    console.error("Failed to start:", err);
-    process.exit(1);
+    console.error("[seed] Super admin seed error:", err);
   }
+
+  app.listen(config.port, "0.0.0.0", () => {
+    console.log(`Prime Attendance on port ${config.port}`);
+    console.log(`Super admin: ${config.superAdmin.email}`);
+    console.log(`Environment: ${config.nodeEnv}`);
+  });
 }
 
 start().catch((err) => {
-  console.error("Failed to start:", err);
-  process.exit(1);
+  console.error("Failed to start server listener:", err);
 });
